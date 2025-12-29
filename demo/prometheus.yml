@@ -1,0 +1,12 @@
+# Prometheus configuration for Checkify demo
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'checkify'
+    static_configs:
+      - targets: ['checkify:2112']
+        labels:
+          service: 'checkify'

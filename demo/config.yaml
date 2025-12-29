@@ -1,0 +1,82 @@
+# Demo configuration for Checkify with Prometheus and Grafana
+
+# Expose prometheus metrics for checks
+prometheus:
+  port: 2112
+  path: /metrics
+
+# Demo environments - no real credentials needed
+environments:
+  - name: public
+    vars:
+      httpbin_url: https://httpbin.org
+      github_api: https://api.github.com
+
+# Demo checks using publicly available endpoints
+checks:
+  - name: httpbin-status-200
+    environments: [public]
+    endpoint: "${var.httpbin_url}/status/200"
+    method: GET
+    interval: 15s
+    timeout: 5s
+    tags: [demo, httpbin, success]
+    response_format: none
+    assertion: code == 200
+
+  - name: httpbin-status-should-fail
+    environments: [public]
+    endpoint: "${var.httpbin_url}/status/500"
+    method: GET
+    interval: 15s
+    timeout: 5s
+    tags: [demo, httpbin, success]
+    response_format: none
+    assertion: code == 200
+
+  - name: httpbin-get-json
+    environments: [public]
+    endpoint: "${var.httpbin_url}/get"
+    method: GET
+    interval: 20s
+    timeout: 5s
+    tags: [demo, httpbin, json]
+    response_format: json
+    assertion: |
+      code == 200 &&
+      has(body.url)
+
+  - name: httpbin-delay
+    environments: [public]
+    endpoint: "${var.httpbin_url}/delay/1"
+    method: GET
+    interval: 30s
+    timeout: 3s
+    tags: [demo, httpbin, latency]
+    response_format: json
+    assertion: code == 200
+
+  - name: github-api-rate-limit
+    environments: [public]
+    endpoint: "${var.github_api}/rate_limit"
+    method: GET
+    interval: 25s
+    timeout: 5s
+    tags: [demo, github, api]
+    response_format: json
+    assertion: |
+      code == 200 &&
+      has(body.rate) &&
+      has(body.rate.limit)
+
+  - name: httpbin-user-agent
+    environments: [public]
+    endpoint: "${var.httpbin_url}/user-agent"
+    method: GET
+    interval: 30s
+    timeout: 5s
+    tags: [demo, httpbin, headers]
+    response_format: json
+    assertion: |
+      code == 200 &&
+      body["user-agent"].contains("Checkify")
