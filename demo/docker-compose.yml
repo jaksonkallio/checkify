@@ -1,0 +1,70 @@
+services:
+  # Checkify is the monitoring service that runs checks.
+  checkify:
+    build: ..
+    image: checkify:latest
+    container_name: checkify-demo
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+    environment:
+      - LOG_LEVEL=INFO
+    networks:
+      - checkify-demo
+    ports:
+      - "2112:2112"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:2112/metrics"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Prometheus collects metrics from Checkify and stores them.
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus-demo
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - checkify-demo
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    depends_on:
+      - checkify
+
+  # Grafana visualizes metrics in dashboards and allows users to create alerting rules.
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana-demo
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana-provisioning:/etc/grafana/provisioning:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+    networks:
+      - checkify-demo
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
+networks:
+  checkify-demo:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  grafana-data:
