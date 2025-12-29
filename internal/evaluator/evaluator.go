@@ -16,10 +16,14 @@ type Evaluator struct {
 	checks []Check
 }
 
-func NewEvaluator(checks []Check) *Evaluator {
+func NewEvaluator(checks []Check) (*Evaluator, error) {
+	if err := ValidateCheckSet(checks); err != nil {
+		return nil, fmt.Errorf("validate check set: %w", err)
+	}
+
 	return &Evaluator{
 		checks: checks,
-	}
+	}, nil
 }
 
 // Run will iteratively evaluate all checks based on their configured schedules until the context is cancelled.

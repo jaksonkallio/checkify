@@ -5,21 +5,22 @@ import (
 	"os"
 	"strings"
 
+	"github.com/messari/checkify/internal/config"
 	"github.com/messari/checkify/internal/evaluator"
 )
 
-func convertChecks(cfg Config) ([]evaluator.Check, error) {
+func convertChecks(cfg config.Config) ([]evaluator.Check, error) {
 	// Set the env interpolator with all env vars.
-	envInterpolator := NewInterpolator("env")
+	envInterpolator := config.NewInterpolator("env")
 	for _, value := range os.Environ() {
 		parts := strings.SplitN(value, "=", 2)
 		envInterpolator.Set(parts[0], parts[1])
 	}
 
 	// Set up individual env interpolators for each configured environment.
-	varInterpolators := make(map[string]*Interpolator)
+	varInterpolators := make(map[string]*config.Interpolator)
 	for _, environment := range cfg.Environments {
-		interpolator := NewInterpolator("var")
+		interpolator := config.NewInterpolator("var")
 		for k, v := range environment.Vars {
 			// Set each var interpolated value using the env interpolator.
 			value := envInterpolator.Interpolate(v)
@@ -36,16 +37,18 @@ func convertChecks(cfg Config) ([]evaluator.Check, error) {
 		for _, envName := range c.Environments {
 			environmentVarsInterpolator := varInterpolators[envName]
 
+			interpolatorSet := config.NewInterpolatorSet(envInterpolator, environmentVarsInterpolator)
+
 			headers := make(map[string]string)
 			for k, v := range c.Headers {
-				headers[k] = InterpolateMany(v, envInterpolator, environmentVarsInterpolator)
-				if ContainsInterpolatorPlaceholder(headers[k], envInterpolator, environmentVarsInterpolator) {
+				headers[k] = interpolatorSet.InterpolateMany(v)
+				if interpolatorSet.ContainsPlaceholder(headers[k]) {
 					return nil, fmt.Errorf("header %q contains uninterpolated placeholder", k)
 				}
 			}
 
-			endpoint := InterpolateMany(c.Endpoint, envInterpolator, environmentVarsInterpolator)
-			if ContainsInterpolatorPlaceholder(endpoint, envInterpolator, environmentVarsInterpolator) {
+			endpoint := interpolatorSet.InterpolateMany(c.Endpoint)
+			if interpolatorSet.ContainsPlaceholder(endpoint) {
 				return nil, fmt.Errorf("endpoint contains uninterpolated placeholder")
 			}
 
@@ -71,15 +74,15 @@ func convertChecks(cfg Config) ([]evaluator.Check, error) {
 	return checks, nil
 }
 
-func convertResponseFormat(format ResponseFormat) evaluator.ResponseFormat {
+func convertResponseFormat(format config.ResponseFormat) evaluator.ResponseFormat {
 	switch format {
-	case FormatJSON:
+	case config.FormatJSON:
 		return evaluator.FormatJSON
-	case FormatString:
+	case config.FormatString:
 		return evaluator.FormatString
-	case FormatBinary:
+	case config.FormatBinary:
 		return evaluator.FormatBinary
-	case FormatNone:
+	case config.FormatNone:
 		return evaluator.FormatNone
 	default:
 		return evaluator.FormatNone

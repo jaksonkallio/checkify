@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/messari/checkify/internal/config"
 	"github.com/messari/checkify/internal/evaluator"
 	"github.com/messari/checkify/internal/metrics"
 )
@@ -13,6 +14,7 @@ import (
 var commands = map[string]func(ctx context.Context) error{
 	"evaluator":     evaluatorCmd,
 	"evaluate-once": evaluateOnceCmd,
+	"validate":      validateCmd,
 }
 
 func main() {
@@ -39,6 +41,11 @@ func main() {
 			slog.Error("evaluate-once failed", "error", err)
 			os.Exit(1)
 		}
+	case "validate":
+		if err := validateCmd(ctx); err != nil {
+			slog.Error("validate failed", "error", err)
+			os.Exit(1)
+		}
 	default:
 		slog.Error("unrecognized command", "command", cmd, "commands", commands)
 		os.Exit(1)
@@ -46,7 +53,7 @@ func main() {
 }
 
 func evaluatorCmd(ctx context.Context) error {
-	config, err := loadConfig("config.yaml")
+	config, err := config.Load("config.yaml")
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
@@ -62,7 +69,11 @@ func evaluatorCmd(ctx context.Context) error {
 		slog.Info("prometheus metrics server started", "port", config.Prometheus.Port, "path", config.Prometheus.Path)
 	}
 
-	evaluator.NewEvaluator(checks).Run(ctx)
+	checkEvaluator, err := evaluator.NewEvaluator(checks)
+	if err != nil {
+		return fmt.Errorf("create evaluator: %w", err)
+	}
+	checkEvaluator.Run(ctx)
 	return nil
 }
 
@@ -71,7 +82,7 @@ func evaluateOnceCmd(ctx context.Context) error {
 		return fmt.Errorf("must provide check name as argument")
 	}
 
-	config, err := loadConfig("config.yaml")
+	config, err := config.Load("config.yaml")
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
@@ -83,7 +94,29 @@ func evaluateOnceCmd(ctx context.Context) error {
 
 	// Note that when evaluating once, the Prometheus metrics server is not started as metrics should not be collected for one-off runes.
 
-	evaluator.NewEvaluator(checks).EvaluateChecksByName(ctx, os.Args[2])
+	checkEvaluator, err := evaluator.NewEvaluator(checks)
+	if err != nil {
+		return fmt.Errorf("create evaluator: %w", err)
+	}
+	checkEvaluator.EvaluateChecksByName(ctx, os.Args[2])
+	return nil
+}
+
+func validateCmd(ctx context.Context) error {
+	config, err := config.Load("config.yaml")
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	checks, err := convertChecks(config)
+	if err != nil {
+		return fmt.Errorf("convert checks: %w", err)
+	}
+
+	if err := evaluator.ValidateCheckSet(checks); err != nil {
+		return fmt.Errorf("validate check set: %w", err)
+	}
+
 	return nil
 }
 

@@ -1,12 +1,11 @@
-package main
+// Package config provides configuration loading and parsing, with basic config validation.
+package config
 
 import (
-	"fmt"
 	"os"
-	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v2"
 )
 
 type Config struct {
@@ -51,64 +50,7 @@ const (
 	FormatNone   ResponseFormat = "none"
 )
 
-type InterpolatedString string
-
-type Interpolator struct {
-	// Prefix is the dot prefix for this interpolator.
-	Prefix string
-
-	// Env is a map of actual environment variables.
-	Values map[string]string
-}
-
-func NewInterpolator(prefix string) *Interpolator {
-	return &Interpolator{
-		Prefix: prefix,
-		Values: make(map[string]string),
-	}
-}
-
-func (ie *Interpolator) Set(key, value string) {
-	ie.Values[key] = value
-}
-
-func (ie *Interpolator) Clear() {
-	ie.Values = make(map[string]string)
-}
-
-func (ie *Interpolator) Interpolate(inputIStr InterpolatedString) string {
-	input := string(inputIStr)
-
-	for key, value := range ie.Values {
-		placeholder := fmt.Sprintf("${%s.%s}", ie.Prefix, key)
-		input = strings.ReplaceAll(string(input), placeholder, value)
-	}
-
-	return input
-}
-
-func (ie *Interpolator) ContainsPlaceholder(str string) bool {
-	return strings.Contains(str, fmt.Sprintf("${%s.", ie.Prefix))
-}
-
-func InterpolateMany(input InterpolatedString, interpolators ...*Interpolator) string {
-	result := string(input)
-	for _, interpolator := range interpolators {
-		result = interpolator.Interpolate(InterpolatedString(result))
-	}
-	return result
-}
-
-func ContainsInterpolatorPlaceholder(str string, interpolators ...*Interpolator) bool {
-	for _, interpolator := range interpolators {
-		if interpolator.ContainsPlaceholder(str) {
-			return true
-		}
-	}
-	return false
-}
-
-func loadConfig(path string) (Config, error) {
+func Load(path string) (Config, error) {
 	var config Config
 	fileBytes, err := os.ReadFile(path)
 	if err != nil {

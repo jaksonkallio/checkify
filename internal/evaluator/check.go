@@ -213,3 +213,23 @@ type CheckResult struct {
 	Latency time.Duration
 	Err     error
 }
+
+func ValidateCheckSet(checks []Check) error {
+	// Deduplicate checks by name and environment.
+	type checkKey struct {
+		Name        string
+		Environment string
+	}
+	checkNames := make(map[checkKey]struct{})
+	for _, check := range checks {
+		key := checkKey{
+			Name:        check.Name,
+			Environment: check.Environment,
+		}
+		if _, exists := checkNames[key]; exists {
+			return fmt.Errorf("duplicate check key with name %q in environment %q", check.Name, check.Environment)
+		}
+		checkNames[key] = struct{}{}
+	}
+	return nil
+}
