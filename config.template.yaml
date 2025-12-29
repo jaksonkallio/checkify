@@ -1,0 +1,49 @@
+# Interpolation syntax:
+#   ${env.SOME_VAR_NAME} references a variable name from the environment variables.
+#   ${vars.some_var_name} references a variable defined in the environment's `vars` section.
+
+# Expose prometheus metrics for checks.
+# Useful for integration with Grafana and sophisticated metric-based alerting rules.
+prometheus:
+  port: 2112
+  path: /metrics
+
+# Webhook configuration upon check failure, recovery and/or success.
+webhook:
+  url: https://ntfy.example.com/checks
+  timeout: 5s
+  method: POST
+  headers:
+    Authorization: "Bearer ${env.vars.webhook_token}"
+  on:
+    fail: true
+    recover: true
+    success: false
+
+# Environments define different variable values that are usable in checks.
+# Checks are replicated for each environment they configured for.
+environments:
+  - name: prod
+    vars:
+      base_url: https://api.example.com
+      api_token: ${env.EXAMPLE_PROD_API_TOKEN}
+  - name: stage
+    vars:
+      base_url: https://api-stage.example.com
+      api_token: ${env.EXAMPLE_STAGE_API_TOKEN}
+
+# Checks are the actual checks that will be evaluated at the configured intervals.
+checks:
+  - name: api-gateway-ping
+    environments: [prod, stage]
+    endpoint: "${vars.base_url}/ping"
+    method: GET
+    headers:
+      Authorization: "Bearer ${vars.api_token}"
+    interval: 30s
+    timeout: 5s
+    tags: [health, api-gateway]
+    response_format: string
+    assertion: |
+      code == 200 &&
+      body == "pong"
