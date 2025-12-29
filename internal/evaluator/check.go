@@ -155,6 +155,9 @@ func (c *Check) sendCheckRequest(ctx context.Context) (*http.Response, time.Dura
 		return nil, 0, fmt.Errorf("create HTTP request: %w", err)
 	}
 
+	// Set default User-Agent (user config may override User-Agent)
+	req.Header.Set("User-Agent", "Checkify/1.0")
+
 	// Add headers
 	for key, value := range c.Headers {
 		req.Header.Set(key, value)
