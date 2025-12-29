@@ -1,0 +1,90 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"strings"
+
+	"github.com/messari/checkify/internal/config"
+	"github.com/messari/checkify/internal/evaluator"
+)
+
+func convertChecks(cfg config.Config) ([]evaluator.Check, error) {
+	// Set the env interpolator with all env vars.
+	envInterpolator := config.NewInterpolator("env")
+	for _, value := range os.Environ() {
+		parts := strings.SplitN(value, "=", 2)
+		envInterpolator.Set(parts[0], parts[1])
+	}
+
+	// Set up individual env interpolators for each configured environment.
+	varInterpolators := make(map[string]*config.Interpolator)
+	for _, environment := range cfg.Environments {
+		interpolator := config.NewInterpolator("var")
+		for k, v := range environment.Vars {
+			// Set each var interpolated value using the env interpolator.
+			value := envInterpolator.Interpolate(v)
+			if envInterpolator.ContainsPlaceholder(value) {
+				return nil, fmt.Errorf("environment %q var %q contains uninterpolated placeholder", environment.Name, k)
+			}
+			interpolator.Set(k, value)
+		}
+		varInterpolators[environment.Name] = interpolator
+	}
+
+	var checks []evaluator.Check
+	for _, c := range cfg.Checks {
+		for _, envName := range c.Environments {
+			environmentVarsInterpolator := varInterpolators[envName]
+
+			interpolatorSet := config.NewInterpolatorSet(envInterpolator, environmentVarsInterpolator)
+
+			headers := make(map[string]string)
+			for k, v := range c.Headers {
+				headers[k] = interpolatorSet.InterpolateMany(v)
+				if interpolatorSet.ContainsPlaceholder(headers[k]) {
+					return nil, fmt.Errorf("header %q contains uninterpolated placeholder", k)
+				}
+			}
+
+			endpoint := interpolatorSet.InterpolateMany(c.Endpoint)
+			if interpolatorSet.ContainsPlaceholder(endpoint) {
+				return nil, fmt.Errorf("endpoint contains uninterpolated placeholder")
+			}
+
+			check, err := evaluator.NewCheck(
+				c.Name,
+				endpoint,
+				c.Method,
+				c.Interval,
+				c.Timeout,
+				envName,
+				headers,
+				c.Tags,
+				convertResponseFormat(c.ResponseFormat),
+				c.Assertion,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("create check %s for environment %s: %w", c.Name, envName, err)
+			}
+
+			checks = append(checks, *check)
+		}
+	}
+	return checks, nil
+}
+
+func convertResponseFormat(format config.ResponseFormat) evaluator.ResponseFormat {
+	switch format {
+	case config.FormatJSON:
+		return evaluator.FormatJSON
+	case config.FormatString:
+		return evaluator.FormatString
+	case config.FormatBinary:
+		return evaluator.FormatBinary
+	case config.FormatNone:
+		return evaluator.FormatNone
+	default:
+		return evaluator.FormatNone
+	}
+}
