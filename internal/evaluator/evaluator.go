@@ -64,12 +64,19 @@ func (e *Evaluator) checkEvaluateLoop(ctx context.Context, check Check) {
 
 		result := check.Evaluate(ctx)
 
+		// Build a single string with all tags.
+		// Not doing `strings.Join` so as to maintain a trailing separator for easier parsing.
+		var tagsStr strings.Builder
+		for _, tag := range check.Tags {
+			fmt.Fprintf(&tagsStr, "%s;", tag)
+		}
+
 		// Capture metrics about the check.
 		checkDurationMetric.With(
 			prometheus.Labels{
 				"name":        check.Name,
 				"environment": check.Environment,
-				"tags":        strings.Join(check.Tags, ","),
+				"tags":        tagsStr.String(),
 				"pass":        fmt.Sprintf("%t", result.Pass),
 			},
 		).Observe(float64(result.Latency.Milliseconds()))
