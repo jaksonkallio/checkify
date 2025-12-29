@@ -11,7 +11,7 @@ See [demo/README.md](demo/README.md) for a demo.
 
 ## Commands
 
-- `evaluator` - Run checks continuously at their configured interval (default)
+- `evaluator` - Run checks repeatedly at their configured interval (default)
 - `evaluate-once <check-name>` - Run a specific check once
 - `validate` - Validate configuration file
 
