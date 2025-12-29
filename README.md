@@ -1,4 +1,4 @@
-Checkify enables declaratively define API checks in YAML across multiple environments. Check metrics can be scraped with Prometheus for visualization and alerting in Grafana.
+Declarative API checks in YAML, across multiple environments. Check metrics can be scraped with Prometheus for visualization and alerting in Grafana. 
 
 See [demo/README.md](demo/README.md) for a demo.
 
