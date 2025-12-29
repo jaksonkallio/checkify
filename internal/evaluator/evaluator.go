@@ -73,7 +73,7 @@ func (e *Evaluator) checkEvaluateLoop(ctx context.Context, check Check) {
 		// Regardless of check pass or fail, log the result as `INFO` line.
 		// Do not treat check failures as actual errors, check failures exist at a higher-level.
 		slog.Info(
-			"finished running scheduled check evaluation",
+			"evaluated check for scheduled run",
 			"name", check.Name,
 			"environment", check.Environment,
 			"tags", check.Tags,
@@ -83,5 +83,24 @@ func (e *Evaluator) checkEvaluateLoop(ctx context.Context, check Check) {
 		)
 
 		timer.Reset(check.Interval)
+	}
+}
+
+// EvaluateChecksByName will evaluate a single check by its name and log the result.
+// Note that multiple checks can have the same name, distinguished by their environment, so this may evaluate multiple checks.
+func (e *Evaluator) EvaluateChecksByName(ctx context.Context, checkName string) {
+	for _, check := range e.checks {
+		if check.Name == checkName {
+			result := check.Evaluate(ctx)
+			slog.Info(
+				"evaluated check for single run",
+				"name", check.Name,
+				"environment", check.Environment,
+				"tags", check.Tags,
+				"pass", result.Pass,
+				"latency", result.Latency.Milliseconds(),
+				"error", result.Err,
+			)
+		}
 	}
 }

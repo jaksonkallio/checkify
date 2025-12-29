@@ -11,7 +11,8 @@ import (
 )
 
 var commands = map[string]func(ctx context.Context) error{
-	"evaluator": evaluatorCmd,
+	"evaluator":     evaluatorCmd,
+	"evaluate-once": evaluateOnceCmd,
 }
 
 func main() {
@@ -31,6 +32,11 @@ func main() {
 	case "evaluator":
 		if err := evaluatorCmd(ctx); err != nil {
 			slog.Error("evaluator failed", "error", err)
+			os.Exit(1)
+		}
+	case "evaluate-once":
+		if err := evaluateOnceCmd(ctx); err != nil {
+			slog.Error("evaluate-once failed", "error", err)
 			os.Exit(1)
 		}
 	default:
@@ -57,6 +63,27 @@ func evaluatorCmd(ctx context.Context) error {
 	}
 
 	evaluator.NewEvaluator(checks).Run(ctx)
+	return nil
+}
+
+func evaluateOnceCmd(ctx context.Context) error {
+	if len(os.Args) <= 2 {
+		return fmt.Errorf("must provide check name as argument")
+	}
+
+	config, err := loadConfig("config.yaml")
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	checks, err := convertChecks(config)
+	if err != nil {
+		return fmt.Errorf("convert checks: %w", err)
+	}
+
+	// Note that when evaluating once, the Prometheus metrics server is not started as metrics should not be collected for one-off runes.
+
+	evaluator.NewEvaluator(checks).EvaluateChecksByName(ctx, os.Args[2])
 	return nil
 }
 
