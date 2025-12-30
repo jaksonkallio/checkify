@@ -1,0 +1,19 @@
+prometheus:
+  port: 2112
+  path: /metrics
+
+environments:
+  - name: test
+    vars:
+      api_url: https://api.test.com
+      token: test_token_123
+
+checks:
+  - name: health-check
+    environments: [test]
+    endpoint: "${var.api_url}/health"
+    method: GET
+    interval: 10s
+    timeout: 5s
+    response_format: json
+    assertion: "code == 200 && body.status == 'healthy'"

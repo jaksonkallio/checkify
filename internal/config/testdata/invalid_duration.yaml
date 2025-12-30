@@ -1,0 +1,17 @@
+prometheus:
+  port: 2112
+  path: /metrics
+
+environments:
+  - name: test
+    vars:
+      api_url: https://api.test.com
+
+checks:
+  - name: bad-duration-check
+    environments: [test]
+    endpoint: "${var.api_url}/health"
+    method: GET
+    interval: "not-a-duration"
+    timeout: "also-invalid"
+    response_format: json

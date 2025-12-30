@@ -1,0 +1,33 @@
+prometheus:
+  port: 9090
+  path: /prometheus
+
+environments:
+  - name: prod
+    vars:
+      base_url: https://api.prod.com
+      auth_token: ${env.PROD_TOKEN}
+  - name: stage
+    vars:
+      base_url: https://api.stage.com
+      auth_token: ${env.STAGE_TOKEN}
+
+checks:
+  - name: api-health
+    environments: [prod, stage]
+    endpoint: "${var.base_url}/v1/health"
+    method: GET
+    interval: 30s
+    timeout: 10s
+    response_format: json
+    assertion: "code == 200"
+    tags: [critical, api]
+  - name: metrics-endpoint
+    environments: [prod]
+    endpoint: "${var.base_url}/metrics"
+    method: GET
+    interval: 60s
+    timeout: 5s
+    response_format: string
+    headers:
+      Authorization: "Bearer ${var.auth_token}"

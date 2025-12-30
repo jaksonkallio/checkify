@@ -2,17 +2,16 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/messari/checkify/internal/config"
 	"github.com/messari/checkify/internal/evaluator"
 )
 
-func convertChecks(cfg config.Config) ([]evaluator.Check, error) {
+func convertChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.Check, error) {
 	// Set the env interpolator with all env vars.
 	envInterpolator := config.NewInterpolator("env")
-	for _, value := range os.Environ() {
+	for _, value := range envProvider.Environ() {
 		parts := strings.SplitN(value, "=", 2)
 		envInterpolator.Set(parts[0], parts[1])
 	}

@@ -58,7 +58,7 @@ func evaluatorCmd(ctx context.Context) error {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	checks, err := convertChecks(config)
+	checks, err := convertChecks(config, OSEnvProvider{})
 	if err != nil {
 		return fmt.Errorf("convert checks: %w", err)
 	}
@@ -69,7 +69,7 @@ func evaluatorCmd(ctx context.Context) error {
 		slog.Info("prometheus metrics server started", "port", config.Prometheus.Port, "path", config.Prometheus.Path)
 	}
 
-	checkEvaluator, err := evaluator.NewEvaluator(checks)
+	checkEvaluator, err := evaluator.NewEvaluator(checks, evaluator.RealClock{})
 	if err != nil {
 		return fmt.Errorf("create evaluator: %w", err)
 	}
@@ -87,14 +87,14 @@ func evaluateOnceCmd(ctx context.Context) error {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	checks, err := convertChecks(config)
+	checks, err := convertChecks(config, OSEnvProvider{})
 	if err != nil {
 		return fmt.Errorf("convert checks: %w", err)
 	}
 
 	// Note that when evaluating once, the Prometheus metrics server is not started as metrics should not be collected for one-off runes.
 
-	checkEvaluator, err := evaluator.NewEvaluator(checks)
+	checkEvaluator, err := evaluator.NewEvaluator(checks, evaluator.RealClock{})
 	if err != nil {
 		return fmt.Errorf("create evaluator: %w", err)
 	}
@@ -108,7 +108,7 @@ func validateCmd(ctx context.Context) error {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	checks, err := convertChecks(config)
+	checks, err := convertChecks(config, OSEnvProvider{})
 	if err != nil {
 		return fmt.Errorf("convert checks: %w", err)
 	}

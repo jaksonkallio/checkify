@@ -1,0 +1,8 @@
+prometheus:
+  port: 2112
+  path: /metrics
+environments:
+  - name: test
+    vars: [this is invalid yaml structure
+checks:
+  - name: test-check

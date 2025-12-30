@@ -1,0 +1,10 @@
+prometheus:
+  port: 2112
+
+environments:
+  - name: test
+
+checks:
+  - name: incomplete-check
+    environments: [test]
+    # Missing: endpoint, method, interval, timeout
