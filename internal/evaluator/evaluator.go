@@ -65,22 +65,7 @@ func (e *Evaluator) checkEvaluateLoop(ctx context.Context, check Check) {
 
 		result := check.Evaluate(ctx)
 
-		// Build a single string with all tags.
-		// Not doing `strings.Join` so as to maintain a trailing separator for easier parsing.
-		var tagsStr strings.Builder
-		for _, tag := range check.Tags {
-			fmt.Fprintf(&tagsStr, "%s;", tag)
-		}
-
-		// Capture metrics about the check.
-		checkDurationMetric.With(
-			prometheus.Labels{
-				"name":        check.Name,
-				"environment": check.Environment,
-				"tags":        tagsStr.String(),
-				"pass":        fmt.Sprintf("%t", result.Pass),
-			},
-		).Observe(float64(result.Latency.Milliseconds()))
+		captureCheckMetrics(check, result, e.clock.Now())
 
 		// Regardless of check pass or fail, log the result as `INFO` line.
 		// Do not treat check failures as actual errors, check failures exist at a higher-level.
@@ -115,4 +100,37 @@ func (e *Evaluator) EvaluateChecksByName(ctx context.Context, checkName string) 
 			)
 		}
 	}
+}
+
+func captureCheckMetrics(check Check, result CheckResult, lastEvaluatedAt time.Time) {
+	// Build a single string with all tags.
+	// Not doing `strings.Join` so as to maintain a trailing separator for easier parsing.
+	var tagsStr strings.Builder
+	for _, tag := range check.Tags {
+		fmt.Fprintf(&tagsStr, "%s;", tag)
+	}
+
+	promLabels := prometheus.Labels{
+		"name":        check.Name,
+		"environment": check.Environment,
+		"tags":        tagsStr.String(),
+	}
+
+	var passGaugeValue float64
+	if result.Pass {
+		checkPassLatencyMs.With(promLabels).Observe(float64(result.Latency.Milliseconds()))
+		passGaugeValue = 1
+	}
+
+	checkPassGauge.With(promLabels).Set(passGaugeValue)
+	checkLastEvaluatedGauge.With(promLabels).Set(float64(lastEvaluatedAt.Unix()))
+	checkEvaluationsTotal.With(
+		// Requires additional `pass` label.
+		prometheus.Labels{
+			"name":        check.Name,
+			"environment": check.Environment,
+			"tags":        tagsStr.String(),
+			"pass":        fmt.Sprintf("%t", result.Pass),
+		},
+	).Inc()
 }

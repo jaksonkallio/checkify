@@ -73,15 +73,15 @@ prometheus:
 
 ## Monitoring
 
-After checks have been configured, and you set up Prometheus to scrape from the configured metrics endpoint, then you can utilize the check metrics in Grafana. View [internal/evaluator/prom.go](internal/evaluator/prom.go) to see the Prometheus metrics (and their labels) that will be available.
+After checks have been configured, and you set up Prometheus to scrape from the configured metrics endpoint, then you can utilize the check metrics in Grafana.
 
-For visualization, try the following PromQL queries:
+The following Prometheus metrics are exposed:
+- `check_pass_latency_ms` histogram of passing check latencies with `name`, `environment`, `tags` labels.
+- `check_evaluations_total` counter of total check evaluations with `name`, `environment`, `tags`, `pass` labels.
+- `check_pass` gauge of check current pass/fail state with `name`, `environment`, `tags` labels.
+- `check_last_evaluated_timestamp_seconds` gauge of last evaluated unix timestamp with `name`, `environment`, `tags` labels.
 
-- `sum by(environment, name) (rate(check_duration_count{pass="false"}[1m]))` -> failing check rate by environment and check name.
-- `histogram_quantile(0.95, sum by(environment, name, le) (rate(check_duration_bucket{pass="true"}[1m])))` -> p95 of successful check latencies.
-- `sum by(environment) (increase(check_duration_count{pass="true"}[1h])) / (sum by(environment) (increase(check_duration_count[1h])))` -> check success rate by environment.
-
-For alerting, try adding alert rules around the `increase` of failed checks over the last 5m and firing if this is greater than 0.
+See the [demo](./demo/README.md) for examples of Grafana visualization panels using these metrics.
 
 ## Commands
 
