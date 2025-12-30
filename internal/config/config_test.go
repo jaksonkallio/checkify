@@ -27,10 +27,11 @@ func (m MockFileReader) ReadFile(path string) ([]byte, error) {
 	return data, nil
 }
 
-func TestLoad_ValidBasicConfig(t *testing.T) {
-	reader := MockFileReader{
-		Files: map[string][]byte{
-			"config.yaml": []byte(`
+func TestLoad(t *testing.T) {
+	t.Run("ValidBasicConfig", func(t *testing.T) {
+		reader := MockFileReader{
+			Files: map[string][]byte{
+				"config.yaml": []byte(`
 prometheus:
   port: 2112
   path: /metrics
@@ -49,27 +50,27 @@ checks:
     timeout: 5s
     response_format: json
 `),
-		},
-	}
+			},
+		}
 
-	cfg, err := LoadWithReader("config.yaml", reader)
+		cfg, err := LoadWithReader("config.yaml", reader)
 
-	require.NoError(t, err)
-	assert.Equal(t, 2112, cfg.Prometheus.Port)
-	assert.Equal(t, "/metrics", cfg.Prometheus.Path)
-	assert.Len(t, cfg.Environments, 1)
-	assert.Equal(t, "test", cfg.Environments[0].Name)
-	assert.Len(t, cfg.Checks, 1)
-	assert.Equal(t, "health-check", cfg.Checks[0].Name)
-	assert.Equal(t, "GET", cfg.Checks[0].Method)
-	assert.Equal(t, 30*time.Second, cfg.Checks[0].Interval)
-	assert.Equal(t, 5*time.Second, cfg.Checks[0].Timeout)
-}
+		require.NoError(t, err)
+		assert.Equal(t, 2112, cfg.Prometheus.Port)
+		assert.Equal(t, "/metrics", cfg.Prometheus.Path)
+		assert.Len(t, cfg.Environments, 1)
+		assert.Equal(t, "test", cfg.Environments[0].Name)
+		assert.Len(t, cfg.Checks, 1)
+		assert.Equal(t, "health-check", cfg.Checks[0].Name)
+		assert.Equal(t, "GET", cfg.Checks[0].Method)
+		assert.Equal(t, 30*time.Second, cfg.Checks[0].Interval)
+		assert.Equal(t, 5*time.Second, cfg.Checks[0].Timeout)
+	})
 
-func TestLoad_MultipleEnvironments(t *testing.T) {
-	reader := MockFileReader{
-		Files: map[string][]byte{
-			"config.yaml": []byte(`
+	t.Run("MultipleEnvironments", func(t *testing.T) {
+		reader := MockFileReader{
+			Files: map[string][]byte{
+				"config.yaml": []byte(`
 environments:
   - name: prod
     vars:
@@ -86,44 +87,44 @@ checks:
     interval: 10s
     timeout: 5s
 `),
-		},
-	}
+			},
+		}
 
-	cfg, err := LoadWithReader("config.yaml", reader)
+		cfg, err := LoadWithReader("config.yaml", reader)
 
-	require.NoError(t, err)
-	assert.Len(t, cfg.Environments, 2)
-	assert.Equal(t, "prod", cfg.Environments[0].Name)
-	assert.Equal(t, "stage", cfg.Environments[1].Name)
-}
+		require.NoError(t, err)
+		assert.Len(t, cfg.Environments, 2)
+		assert.Equal(t, "prod", cfg.Environments[0].Name)
+		assert.Equal(t, "stage", cfg.Environments[1].Name)
+	})
 
-func TestLoad_FileNotFound(t *testing.T) {
-	reader := MockFileReader{
-		Files: map[string][]byte{},
-	}
+	t.Run("FileNotFound", func(t *testing.T) {
+		reader := MockFileReader{
+			Files: map[string][]byte{},
+		}
 
-	_, err := LoadWithReader("nonexistent.yaml", reader)
+		_, err := LoadWithReader("nonexistent.yaml", reader)
 
-	assert.Error(t, err)
-	assert.Equal(t, os.ErrNotExist, err)
-}
+		assert.Error(t, err)
+		assert.Equal(t, os.ErrNotExist, err)
+	})
 
-func TestLoad_InvalidYAML(t *testing.T) {
-	reader := MockFileReader{
-		Files: map[string][]byte{
-			"bad.yaml": []byte(`invalid: yaml: content: [unclosed`),
-		},
-	}
+	t.Run("InvalidYAML", func(t *testing.T) {
+		reader := MockFileReader{
+			Files: map[string][]byte{
+				"bad.yaml": []byte(`invalid: yaml: content: [unclosed`),
+			},
+		}
 
-	_, err := LoadWithReader("bad.yaml", reader)
+		_, err := LoadWithReader("bad.yaml", reader)
 
-	assert.Error(t, err)
-}
+		assert.Error(t, err)
+	})
 
-func TestLoad_WithHeaders(t *testing.T) {
-	reader := MockFileReader{
-		Files: map[string][]byte{
-			"config.yaml": []byte(`
+	t.Run("WithHeaders", func(t *testing.T) {
+		reader := MockFileReader{
+			Files: map[string][]byte{
+				"config.yaml": []byte(`
 environments:
   - name: test
 
@@ -138,22 +139,22 @@ checks:
       Authorization: Bearer token
       Content-Type: application/json
 `),
-		},
-	}
+			},
+		}
 
-	cfg, err := LoadWithReader("config.yaml", reader)
+		cfg, err := LoadWithReader("config.yaml", reader)
 
-	require.NoError(t, err)
-	assert.Len(t, cfg.Checks, 1)
-	assert.Len(t, cfg.Checks[0].Headers, 2)
-	assert.Equal(t, InterpolatedString("Bearer token"), cfg.Checks[0].Headers["Authorization"])
-	assert.Equal(t, InterpolatedString("application/json"), cfg.Checks[0].Headers["Content-Type"])
-}
+		require.NoError(t, err)
+		assert.Len(t, cfg.Checks, 1)
+		assert.Len(t, cfg.Checks[0].Headers, 2)
+		assert.Equal(t, InterpolatedString("Bearer token"), cfg.Checks[0].Headers["Authorization"])
+		assert.Equal(t, InterpolatedString("application/json"), cfg.Checks[0].Headers["Content-Type"])
+	})
 
-func TestLoad_WithTags(t *testing.T) {
-	reader := MockFileReader{
-		Files: map[string][]byte{
-			"config.yaml": []byte(`
+	t.Run("WithTags", func(t *testing.T) {
+		reader := MockFileReader{
+			Files: map[string][]byte{
+				"config.yaml": []byte(`
 environments:
   - name: test
 
@@ -166,51 +167,33 @@ checks:
     timeout: 5s
     tags: [critical, api, health]
 `),
-		},
-	}
+			},
+		}
 
-	cfg, err := LoadWithReader("config.yaml", reader)
+		cfg, err := LoadWithReader("config.yaml", reader)
 
-	require.NoError(t, err)
-	assert.Len(t, cfg.Checks, 1)
-	assert.Equal(t, []string{"critical", "api", "health"}, cfg.Checks[0].Tags)
-}
+		require.NoError(t, err)
+		assert.Len(t, cfg.Checks, 1)
+		assert.Equal(t, []string{"critical", "api", "health"}, cfg.Checks[0].Tags)
+	})
 
-func TestPrometheus_Enabled_True(t *testing.T) {
-	prom := Prometheus{
-		Port: 9090,
-		Path: "/metrics",
-	}
+	t.Run("ResponseFormats", func(t *testing.T) {
+		tests := []struct {
+			name           string
+			format         string
+			expectedFormat ResponseFormat
+		}{
+			{"JSON format", "json", FormatJSON},
+			{"String format", "string", FormatString},
+			{"Binary format", "binary", FormatBinary},
+			{"None format", "none", FormatNone},
+		}
 
-	assert.True(t, prom.Enabled())
-}
-
-func TestPrometheus_Enabled_False(t *testing.T) {
-	prom := Prometheus{
-		Port: 0,
-		Path: "/metrics",
-	}
-
-	assert.False(t, prom.Enabled())
-}
-
-func TestLoad_ResponseFormats(t *testing.T) {
-	tests := []struct {
-		name           string
-		format         string
-		expectedFormat ResponseFormat
-	}{
-		{"JSON format", "json", FormatJSON},
-		{"String format", "string", FormatString},
-		{"Binary format", "binary", FormatBinary},
-		{"None format", "none", FormatNone},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			reader := MockFileReader{
-				Files: map[string][]byte{
-					"config.yaml": []byte(`
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				reader := MockFileReader{
+					Files: map[string][]byte{
+						"config.yaml": []byte(`
 environments:
   - name: test
 
@@ -223,21 +206,21 @@ checks:
     timeout: 5s
     response_format: ` + tt.format + `
 `),
-				},
-			}
+					},
+				}
 
-			cfg, err := LoadWithReader("config.yaml", reader)
+				cfg, err := LoadWithReader("config.yaml", reader)
 
-			require.NoError(t, err)
-			assert.Equal(t, tt.expectedFormat, cfg.Checks[0].ResponseFormat)
-		})
-	}
-}
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedFormat, cfg.Checks[0].ResponseFormat)
+			})
+		}
+	})
 
-func TestLoad_WithAssertion(t *testing.T) {
-	reader := MockFileReader{
-		Files: map[string][]byte{
-			"config.yaml": []byte(`
+	t.Run("WithAssertion", func(t *testing.T) {
+		reader := MockFileReader{
+			Files: map[string][]byte{
+				"config.yaml": []byte(`
 environments:
   - name: test
 
@@ -251,25 +234,46 @@ checks:
     response_format: json
     assertion: "code == 200 && body.status == 'ok'"
 `),
-		},
-	}
+			},
+		}
 
-	cfg, err := LoadWithReader("config.yaml", reader)
+		cfg, err := LoadWithReader("config.yaml", reader)
 
-	require.NoError(t, err)
-	assert.Equal(t, "code == 200 && body.status == 'ok'", cfg.Checks[0].Assertion)
+		require.NoError(t, err)
+		assert.Equal(t, "code == 200 && body.status == 'ok'", cfg.Checks[0].Assertion)
+	})
+
+	t.Run("EmptyConfig", func(t *testing.T) {
+		reader := MockFileReader{
+			Files: map[string][]byte{
+				"empty.yaml": []byte(``),
+			},
+		}
+
+		cfg, err := LoadWithReader("empty.yaml", reader)
+
+		require.NoError(t, err)
+		assert.Len(t, cfg.Environments, 0)
+		assert.Len(t, cfg.Checks, 0)
+	})
 }
 
-func TestLoad_EmptyConfig(t *testing.T) {
-	reader := MockFileReader{
-		Files: map[string][]byte{
-			"empty.yaml": []byte(``),
-		},
-	}
+func TestPrometheus_Enabled(t *testing.T) {
+	t.Run("True", func(t *testing.T) {
+		prom := Prometheus{
+			Port: 9090,
+			Path: "/metrics",
+		}
 
-	cfg, err := LoadWithReader("empty.yaml", reader)
+		assert.True(t, prom.Enabled())
+	})
 
-	require.NoError(t, err)
-	assert.Len(t, cfg.Environments, 0)
-	assert.Len(t, cfg.Checks, 0)
+	t.Run("False", func(t *testing.T) {
+		prom := Prometheus{
+			Port: 0,
+			Path: "/metrics",
+		}
+
+		assert.False(t, prom.Enabled())
+	})
 }

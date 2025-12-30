@@ -9,98 +9,102 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewEvaluator_Success(t *testing.T) {
-	checks := []Check{
-		{Name: "check1", Environment: "prod"},
-		{Name: "check2", Environment: "prod"},
-	}
+func TestNewEvaluator(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		checks := []Check{
+			{Name: "check1", Environment: "prod"},
+			{Name: "check2", Environment: "prod"},
+		}
 
-	evaluator, err := NewEvaluator(checks, RealClock{})
+		evaluator, err := NewEvaluator(checks, RealClock{})
 
-	require.NoError(t, err)
-	assert.NotNil(t, evaluator)
-	assert.Len(t, evaluator.checks, 2)
+		require.NoError(t, err)
+		assert.NotNil(t, evaluator)
+		assert.Len(t, evaluator.checks, 2)
+	})
+
+	t.Run("ValidatesCheckSet", func(t *testing.T) {
+		checks := []Check{
+			{Name: "duplicate", Environment: "prod"},
+			{Name: "duplicate", Environment: "prod"}, // Duplicate
+		}
+
+		_, err := NewEvaluator(checks, RealClock{})
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "validate check set")
+	})
+
+	t.Run("DuplicateCheckError", func(t *testing.T) {
+		checks := []Check{
+			{Name: "api-check", Environment: "prod"},
+			{Name: "api-check", Environment: "prod"}, // Exact duplicate
+		}
+
+		_, err := NewEvaluator(checks, RealClock{})
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "duplicate check key")
+	})
+
+	t.Run("EmptyCheckSet", func(t *testing.T) {
+		checks := []Check{}
+
+		evaluator, err := NewEvaluator(checks, RealClock{})
+
+		require.NoError(t, err)
+		assert.NotNil(t, evaluator)
+		assert.Len(t, evaluator.checks, 0)
+	})
 }
 
-func TestNewEvaluator_ValidatesCheckSet(t *testing.T) {
-	checks := []Check{
-		{Name: "duplicate", Environment: "prod"},
-		{Name: "duplicate", Environment: "prod"}, // Duplicate
-	}
+func TestEvaluator_EvaluateChecksByName(t *testing.T) {
+	t.Run("SingleCheck", func(t *testing.T) {
+		// Create a simple check with no HTTP client (won't actually execute)
+		check := Check{
+			Name:        "test-check",
+			Environment: "test",
+			Timeout:     -1 * time.Second, // Negative timeout = immediate error
+		}
 
-	_, err := NewEvaluator(checks, RealClock{})
+		evaluator, err := NewEvaluator([]Check{check}, RealClock{})
+		require.NoError(t, err)
 
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "validate check set")
-}
+		// This should not panic, it will just execute the check
+		evaluator.EvaluateChecksByName(context.Background(), "test-check")
 
-func TestNewEvaluator_DuplicateCheckError(t *testing.T) {
-	checks := []Check{
-		{Name: "api-check", Environment: "prod"},
-		{Name: "api-check", Environment: "prod"}, // Exact duplicate
-	}
+		// Test completes successfully if no panic
+	})
 
-	_, err := NewEvaluator(checks, RealClock{})
+	t.Run("MultipleChecks", func(t *testing.T) {
+		checks := []Check{
+			{Name: "check1", Environment: "prod", Timeout: -1 * time.Second},
+			{Name: "check1", Environment: "stage", Timeout: -1 * time.Second},
+			{Name: "check2", Environment: "prod", Timeout: -1 * time.Second},
+		}
 
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "duplicate check key")
-}
+		evaluator, err := NewEvaluator(checks, RealClock{})
+		require.NoError(t, err)
 
-func TestNewEvaluator_EmptyCheckSet(t *testing.T) {
-	checks := []Check{}
+		// Should evaluate both checks with name "check1"
+		evaluator.EvaluateChecksByName(context.Background(), "check1")
 
-	evaluator, err := NewEvaluator(checks, RealClock{})
+		// Test completes successfully if no panic
+	})
 
-	require.NoError(t, err)
-	assert.NotNil(t, evaluator)
-	assert.Len(t, evaluator.checks, 0)
-}
+	t.Run("CheckNotFound", func(t *testing.T) {
+		checks := []Check{
+			{Name: "existing-check", Environment: "prod", Timeout: -1 * time.Second},
+		}
 
-func TestEvaluator_EvaluateChecksByName_SingleCheck(t *testing.T) {
-	// Create a simple check with no HTTP client (won't actually execute)
-	check := Check{
-		Name:        "test-check",
-		Environment: "test",
-		Timeout:     -1 * time.Second, // Negative timeout = immediate error
-	}
+		evaluator, err := NewEvaluator(checks, RealClock{})
+		require.NoError(t, err)
 
-	evaluator, err := NewEvaluator([]Check{check}, RealClock{})
-	require.NoError(t, err)
+		// Should not panic even if check doesn't exist
+		evaluator.EvaluateChecksByName(context.Background(), "nonexistent")
 
-	// This should not panic, it will just execute the check
-	evaluator.EvaluateChecksByName(context.Background(), "test-check")
-
-	// Test completes successfully if no panic
-}
-
-func TestEvaluator_EvaluateChecksByName_MultipleChecks(t *testing.T) {
-	checks := []Check{
-		{Name: "check1", Environment: "prod", Timeout: -1 * time.Second},
-		{Name: "check1", Environment: "stage", Timeout: -1 * time.Second},
-		{Name: "check2", Environment: "prod", Timeout: -1 * time.Second},
-	}
-
-	evaluator, err := NewEvaluator(checks, RealClock{})
-	require.NoError(t, err)
-
-	// Should evaluate both checks with name "check1"
-	evaluator.EvaluateChecksByName(context.Background(), "check1")
-
-	// Test completes successfully if no panic
-}
-
-func TestEvaluator_EvaluateChecksByName_CheckNotFound(t *testing.T) {
-	checks := []Check{
-		{Name: "existing-check", Environment: "prod", Timeout: -1 * time.Second},
-	}
-
-	evaluator, err := NewEvaluator(checks, RealClock{})
-	require.NoError(t, err)
-
-	// Should not panic even if check doesn't exist
-	evaluator.EvaluateChecksByName(context.Background(), "nonexistent")
-
-	// Test completes successfully if no panic
+		// Test completes successfully if no panic
+	})
 }
 
 // MockClock for testing scheduling behavior
@@ -120,48 +124,52 @@ func (mc MockClock) Jitter(max time.Duration) time.Duration {
 	return mc.JitterDuration
 }
 
-func TestRealClock_Jitter_ZeroMax(t *testing.T) {
-	clock := RealClock{}
+func TestRealClock(t *testing.T) {
+	t.Run("Jitter", func(t *testing.T) {
+		t.Run("ZeroMax", func(t *testing.T) {
+			clock := RealClock{}
 
-	result := clock.Jitter(0)
+			result := clock.Jitter(0)
 
-	assert.Equal(t, time.Duration(0), result)
-}
+			assert.Equal(t, time.Duration(0), result)
+		})
 
-func TestRealClock_Jitter_NegativeMax(t *testing.T) {
-	clock := RealClock{}
+		t.Run("NegativeMax", func(t *testing.T) {
+			clock := RealClock{}
 
-	result := clock.Jitter(-10 * time.Second)
+			result := clock.Jitter(-10 * time.Second)
 
-	assert.Equal(t, time.Duration(0), result)
-}
+			assert.Equal(t, time.Duration(0), result)
+		})
 
-func TestRealClock_Jitter_PositiveMax(t *testing.T) {
-	clock := RealClock{}
+		t.Run("PositiveMax", func(t *testing.T) {
+			clock := RealClock{}
 
-	result := clock.Jitter(10 * time.Second)
+			result := clock.Jitter(10 * time.Second)
 
-	// Should be between 0 and max
-	assert.GreaterOrEqual(t, result, time.Duration(0))
-	assert.LessOrEqual(t, result, 10*time.Second)
-}
+			// Should be between 0 and max
+			assert.GreaterOrEqual(t, result, time.Duration(0))
+			assert.LessOrEqual(t, result, 10*time.Second)
+		})
+	})
 
-func TestRealClock_Now(t *testing.T) {
-	clock := RealClock{}
+	t.Run("Now", func(t *testing.T) {
+		clock := RealClock{}
 
-	before := time.Now()
-	result := clock.Now()
-	after := time.Now()
+		before := time.Now()
+		result := clock.Now()
+		after := time.Now()
 
-	assert.True(t, result.After(before) || result.Equal(before))
-	assert.True(t, result.Before(after) || result.Equal(after))
-}
+		assert.True(t, result.After(before) || result.Equal(before))
+		assert.True(t, result.Before(after) || result.Equal(after))
+	})
 
-func TestRealClock_NewTimer(t *testing.T) {
-	clock := RealClock{}
+	t.Run("NewTimer", func(t *testing.T) {
+		clock := RealClock{}
 
-	timer := clock.NewTimer(10 * time.Millisecond)
+		timer := clock.NewTimer(10 * time.Millisecond)
 
-	assert.NotNil(t, timer)
-	timer.Stop() // Clean up
+		assert.NotNil(t, timer)
+		timer.Stop() // Clean up
+	})
 }
