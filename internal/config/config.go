@@ -2,10 +2,7 @@
 package config
 
 import (
-	"os"
 	"time"
-
-	"go.yaml.in/yaml/v2"
 )
 
 type Config struct {
@@ -51,12 +48,5 @@ const (
 )
 
 func Load(path string) (Config, error) {
-	var config Config
-	fileBytes, err := os.ReadFile(path)
-	if err != nil {
-		return config, err
-	}
-
-	err = yaml.Unmarshal(fileBytes, &config)
-	return config, err
+	return LoadWithReader(path, OSFileReader{})
 }

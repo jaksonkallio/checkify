@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"math/rand"
 	"strings"
 	"time"
 
@@ -14,15 +13,17 @@ import (
 
 type Evaluator struct {
 	checks []Check
+	clock  Clock
 }
 
-func NewEvaluator(checks []Check) (*Evaluator, error) {
+func NewEvaluator(checks []Check, clock Clock) (*Evaluator, error) {
 	if err := ValidateCheckSet(checks); err != nil {
 		return nil, fmt.Errorf("validate check set: %w", err)
 	}
 
 	return &Evaluator{
 		checks: checks,
+		clock:  clock,
 	}, nil
 }
 
@@ -51,8 +52,8 @@ func (e *Evaluator) checkEvaluateLoop(ctx context.Context, check Check) {
 	}
 
 	// Initial phase jitter, up to check interval duration.
-	delay := time.Duration(rand.Int63n(int64(check.Interval)))
-	timer := time.NewTimer(delay)
+	delay := e.clock.Jitter(check.Interval)
+	timer := e.clock.NewTimer(delay)
 	defer timer.Stop()
 
 	for {

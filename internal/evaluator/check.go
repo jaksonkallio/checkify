@@ -44,6 +44,7 @@ type Check struct {
 	ResponseFormat ResponseFormat
 	Assertion      string
 	celProgram     cel.Program
+	httpClient     HTTPClient
 }
 
 func NewCheck(name string, endpoint string, method string, interval time.Duration, timeout time.Duration, environment string, headers map[string]string, tags []string, responseFormat ResponseFormat, assertion string) (*Check, error) {
@@ -58,6 +59,7 @@ func NewCheck(name string, endpoint string, method string, interval time.Duratio
 		Tags:           tags,
 		ResponseFormat: responseFormat,
 		Assertion:      assertion,
+		httpClient:     &DefaultHTTPClient{Timeout: timeout},
 	}
 
 	// Compile CEL assertion program if provided
@@ -168,12 +170,8 @@ func (c *Check) sendCheckRequest(ctx context.Context) (*http.Response, time.Dura
 		return nil, 0, NewErrCheckTimeout(c.Timeout)
 	}
 
-	client := &http.Client{
-		Timeout: c.Timeout,
-	}
-
 	start := time.Now()
-	resp, err := client.Do(req)
+	resp, err := c.httpClient.Do(req)
 	latency := time.Since(start)
 	if err != nil {
 		return nil, latency, fmt.Errorf("do HTTP request: %w", err)
