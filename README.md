@@ -2,7 +2,7 @@ Declarative API checks in YAML, across multiple environments. Check metrics can 
 
 See [demo/README.md](demo/README.md) for a demo.
 
-![demo/screenshot.png](screenshot)
+![grafana demo screenshot](demo/screenshot.png)
 
 ## Features
 
