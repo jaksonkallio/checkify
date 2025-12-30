@@ -2,6 +2,8 @@ Declarative API checks in YAML, across multiple environments. Check metrics can 
 
 See [demo/README.md](demo/README.md) for a demo.
 
+![demo/screenshot.png](screenshot)
+
 ## Features
 
 - **Declarative YAML Configuration**: Define checks with endpoints, assertions, and intervals in YAML.
