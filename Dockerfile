@@ -1,6 +1,9 @@
 # Build stage
 FROM golang:1.25.4-alpine AS builder
 
+ARG TARGETOS
+ARG TARGETARCH
+
 # Install build dependencies
 RUN apk add --no-cache git ca-certificates
 
@@ -14,7 +17,10 @@ RUN go mod download
 COPY . .
 
 # Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -ldflags '-w -s' -o checkify ./cmd
+RUN CGO_ENABLED=0 \
+    GOOS=$TARGETOS \
+    GOARCH=$TARGETARCH \
+	go build -ldflags '-w -s' -o checkify ./cmd
 
 # Runtime stage
 FROM alpine:latest
