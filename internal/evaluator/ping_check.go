@@ -18,6 +18,66 @@ const (
 
 type IPStack string
 
+// PingStatistics contains the results of a ping operation
+type PingStatistics struct {
+	PacketsSent           int
+	PacketsRecv           int
+	PacketsRecvDuplicates int
+	PacketLoss            float64
+	AvgRtt                time.Duration
+	MinRtt                time.Duration
+	MaxRtt                time.Duration
+}
+
+// Pinger interface allows mocking ping operations for testing
+type Pinger interface {
+	Run(ctx context.Context) (PingStatistics, error)
+}
+
+// DefaultPinger wraps pro-bing to implement the Pinger interface
+type DefaultPinger struct {
+	Host    string
+	Count   int
+	Timeout time.Duration
+	IPStack IPStack
+}
+
+// Run executes the ping and returns statistics
+func (p *DefaultPinger) Run(ctx context.Context) (PingStatistics, error) {
+	pinger, err := probing.NewPinger(p.Host)
+	if err != nil {
+		return PingStatistics{}, fmt.Errorf("create pinger: %w", err)
+	}
+
+	pinger.Count = p.Count
+	pinger.Timeout = p.Timeout
+	pinger.SetPrivileged(false)
+
+	switch p.IPStack {
+	case IPStackIPv4:
+		pinger.SetNetwork("ip4")
+	case IPStackIPv6:
+		pinger.SetNetwork("ip6")
+	default:
+		pinger.SetNetwork("ip")
+	}
+
+	if err := pinger.RunWithContext(ctx); err != nil {
+		return PingStatistics{}, fmt.Errorf("run ping with context: %w", err)
+	}
+
+	stats := pinger.Statistics()
+	return PingStatistics{
+		PacketsSent:           stats.PacketsSent,
+		PacketsRecv:           stats.PacketsRecv,
+		PacketsRecvDuplicates: stats.PacketsRecvDuplicates,
+		PacketLoss:            stats.PacketLoss,
+		AvgRtt:                stats.AvgRtt,
+		MinRtt:                stats.MinRtt,
+		MaxRtt:                stats.MaxRtt,
+	}, nil
+}
+
 type PingCheck struct {
 	Name             string
 	Count            int
@@ -29,6 +89,7 @@ type PingCheck struct {
 	Assertion        string
 	IPStack          IPStack
 	assertionProgram cel.Program
+	pinger           Pinger
 }
 
 func NewPingCheck(name string, host string, interval time.Duration, count int, timeout time.Duration, environment string, tags []string, ipStack IPStack, assertion string) (*PingCheck, error) {
@@ -81,6 +142,12 @@ func NewPingCheck(name string, host string, interval time.Duration, count int, t
 		IPStack:          ipStack,
 		Assertion:        assertion,
 		assertionProgram: assertionProgram,
+		pinger: &DefaultPinger{
+			Host:    host,
+			Count:   count,
+			Timeout: timeout,
+			IPStack: ipStack,
+		},
 	}
 
 	return check, nil
@@ -96,48 +163,13 @@ func (c *PingCheck) Evaluate(ctx context.Context) CheckResult {
 		}
 	}
 
-	pinger, err := probing.NewPinger(c.Host)
+	stats, err := c.pinger.Run(ctx)
 	if err != nil {
 		return CheckResult{
-			Err:     fmt.Errorf("create pinger: %w", err),
+			Err:     err,
 			Latency: 0,
 		}
 	}
-	pinger.Count = 1
-	pinger.Timeout = c.Timeout
-	pinger.SetPrivileged(false)
-
-	switch c.IPStack {
-	case IPStackIPv4:
-		pinger.SetNetwork("ip4")
-	case IPStackIPv6:
-		pinger.SetNetwork("ip6")
-	default:
-		pinger.SetNetwork("ip")
-	}
-
-	errChan := make(chan error, 1)
-	go func() {
-		errChan <- pinger.Run()
-	}()
-
-	select {
-	case <-ctx.Done():
-		pinger.Stop()
-		return CheckResult{
-			Err:     ctx.Err(),
-			Latency: 0,
-		}
-	case err := <-errChan:
-		if err != nil {
-			return CheckResult{
-				Err:     fmt.Errorf("run ping: %w", err),
-				Latency: 0,
-			}
-		}
-	}
-
-	stats := pinger.Statistics()
 
 	// Use average RTT as the latency metric.
 	latency := stats.AvgRtt
@@ -165,7 +197,7 @@ func (c *PingCheck) Evaluate(ctx context.Context) CheckResult {
 }
 
 // evaluateAssertion evaluates the CEL assertion against the ping statistics using the pre-compiled program.
-func (c *PingCheck) evaluateAssertion(stats *probing.Statistics) (bool, error) {
+func (c *PingCheck) evaluateAssertion(stats PingStatistics) (bool, error) {
 	out, _, err := c.assertionProgram.Eval(map[string]any{
 		"avg_rtt_ms":           int(stats.AvgRtt.Milliseconds()),
 		"max_rtt_ms":           int(stats.MaxRtt.Milliseconds()),

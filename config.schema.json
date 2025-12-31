@@ -217,10 +217,10 @@
               },
               "assertion": {
                 "type": "string",
-                "description": "CEL expression to validate ping results (available variables: packet_loss, avg_rtt, min_rtt, max_rtt)",
+                "description": "CEL expression to validate ping results (available variables: packet_loss_pct, avg_rtt_ms, min_rtt_ms, max_rtt_ms, packets_sent, packets_received, packets_received_dup)",
                 "examples": [
-                  "packet_loss == 0",
-                  "packet_loss < 10 && avg_rtt < 100"
+                  "packet_loss_pct == 0.0",
+                  "packet_loss_pct < 10.0 && avg_rtt_ms < 100"
                 ]
               }
             },
