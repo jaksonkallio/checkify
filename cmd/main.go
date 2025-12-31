@@ -58,9 +58,14 @@ func evaluatorCmd(ctx context.Context) error {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	checks, err := convertChecks(config, OSEnvProvider{})
+	httpChecks, err := convertHTTPChecks(config, OSEnvProvider{})
 	if err != nil {
-		return fmt.Errorf("convert checks: %w", err)
+		return fmt.Errorf("convert HTTP checks: %w", err)
+	}
+
+	pingChecks, err := convertPingChecks(config, OSEnvProvider{})
+	if err != nil {
+		return fmt.Errorf("convert Ping checks: %w", err)
 	}
 
 	if config.Prometheus.Enabled() {
@@ -69,7 +74,7 @@ func evaluatorCmd(ctx context.Context) error {
 		slog.Info("prometheus metrics server started", "port", config.Prometheus.Port, "path", config.Prometheus.Path)
 	}
 
-	checkEvaluator, err := evaluator.NewEvaluator(checks, evaluator.RealClock{})
+	checkEvaluator, err := evaluator.NewEvaluator(httpChecks, pingChecks, evaluator.RealClock{})
 	if err != nil {
 		return fmt.Errorf("create evaluator: %w", err)
 	}
@@ -87,14 +92,19 @@ func evaluateOnceCmd(ctx context.Context) error {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	checks, err := convertChecks(config, OSEnvProvider{})
+	httpChecks, err := convertHTTPChecks(config, OSEnvProvider{})
 	if err != nil {
-		return fmt.Errorf("convert checks: %w", err)
+		return fmt.Errorf("convert HTTP checks: %w", err)
+	}
+
+	pingChecks, err := convertPingChecks(config, OSEnvProvider{})
+	if err != nil {
+		return fmt.Errorf("convert Ping checks: %w", err)
 	}
 
 	// Note that when evaluating once, the Prometheus metrics server is not started as metrics should not be collected for one-off runes.
 
-	checkEvaluator, err := evaluator.NewEvaluator(checks, evaluator.RealClock{})
+	checkEvaluator, err := evaluator.NewEvaluator(httpChecks, pingChecks, evaluator.RealClock{})
 	if err != nil {
 		return fmt.Errorf("create evaluator: %w", err)
 	}
@@ -108,13 +118,22 @@ func validateCmd(ctx context.Context) error {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	checks, err := convertChecks(config, OSEnvProvider{})
+	httpChecks, err := convertHTTPChecks(config, OSEnvProvider{})
 	if err != nil {
-		return fmt.Errorf("convert checks: %w", err)
+		return fmt.Errorf("convert HTTP checks: %w", err)
 	}
 
-	if err := evaluator.ValidateCheckSet(checks); err != nil {
-		return fmt.Errorf("validate check set: %w", err)
+	pingChecks, err := convertPingChecks(config, OSEnvProvider{})
+	if err != nil {
+		return fmt.Errorf("convert Ping checks: %w", err)
+	}
+
+	if err := evaluator.ValidateHTTPCheckSet(httpChecks); err != nil {
+		return fmt.Errorf("validate HTTP check set: %w", err)
+	}
+
+	if err := evaluator.ValidatePingCheckSet(pingChecks); err != nil {
+		return fmt.Errorf("validate Ping check set: %w", err)
 	}
 
 	return nil

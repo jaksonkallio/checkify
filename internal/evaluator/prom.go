@@ -14,6 +14,7 @@ var (
 		"name",
 		"environment",
 		"tags",
+		"type",
 	})
 
 	checkEvaluationsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -23,6 +24,7 @@ var (
 		"name",
 		"environment",
 		"tags",
+		"type",
 		"pass",
 	})
 
@@ -33,6 +35,7 @@ var (
 		"name",
 		"environment",
 		"tags",
+		"type",
 	})
 
 	checkLastEvaluatedGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
@@ -42,5 +45,6 @@ var (
 		"name",
 		"environment",
 		"tags",
+		"type",
 	})
 )

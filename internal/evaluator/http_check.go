@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/cel-go/cel"
+	"github.com/stretchr/testify/mock"
 )
 
 type ResponseFormat string
@@ -32,7 +33,7 @@ func (e *ErrCheckTimeout) Error() string {
 	return fmt.Sprintf("check timed out after %s", e.Timeout)
 }
 
-type Check struct {
+type HTTPCheck struct {
 	Name           string
 	Timeout        time.Duration
 	Interval       time.Duration
@@ -47,8 +48,8 @@ type Check struct {
 	httpClient     HTTPClient
 }
 
-func NewCheck(name string, endpoint string, method string, interval time.Duration, timeout time.Duration, environment string, headers map[string]string, tags []string, responseFormat ResponseFormat, assertion string) (*Check, error) {
-	check := &Check{
+func NewHTTPCheck(name string, endpoint string, method string, interval time.Duration, timeout time.Duration, environment string, headers map[string]string, tags []string, responseFormat ResponseFormat, assertion string) (*HTTPCheck, error) {
+	check := &HTTPCheck{
 		Name:           name,
 		Endpoint:       endpoint,
 		Method:         method,
@@ -90,7 +91,7 @@ func NewCheck(name string, endpoint string, method string, interval time.Duratio
 }
 
 // Evaluate will perform the check and evaluate its assertion, returning an non-pass if the request or assertion failed.
-func (c *Check) Evaluate(ctx context.Context) CheckResult {
+func (c *HTTPCheck) Evaluate(ctx context.Context) CheckResult {
 	resp, latency, err := c.sendCheckRequest(ctx)
 	if err != nil {
 		return CheckResult{
@@ -150,7 +151,7 @@ func (c *Check) Evaluate(ctx context.Context) CheckResult {
 	}
 }
 
-func (c *Check) sendCheckRequest(ctx context.Context) (*http.Response, time.Duration, error) {
+func (c *HTTPCheck) sendCheckRequest(ctx context.Context) (*http.Response, time.Duration, error) {
 	// Create HTTP request with context for cancellation support
 	req, err := http.NewRequestWithContext(ctx, c.Method, c.Endpoint, nil)
 	if err != nil {
@@ -181,7 +182,7 @@ func (c *Check) sendCheckRequest(ctx context.Context) (*http.Response, time.Dura
 }
 
 // evaluateAssertion evaluates the CEL assertion against the response using the pre-compiled program
-func (c *Check) evaluateAssertion(responseData interface{}, resp *http.Response) (bool, error) {
+func (c *HTTPCheck) evaluateAssertion(responseData interface{}, resp *http.Response) (bool, error) {
 	// Convert headers to map[string]string
 	headers := make(map[string]string)
 	for key, values := range resp.Header {
@@ -190,7 +191,6 @@ func (c *Check) evaluateAssertion(responseData interface{}, resp *http.Response)
 		}
 	}
 
-	// Evaluate the pre-compiled program with the response data
 	out, _, err := c.celProgram.Eval(map[string]interface{}{
 		"body":    responseData,
 		"code":    int64(resp.StatusCode),
@@ -200,7 +200,6 @@ func (c *Check) evaluateAssertion(responseData interface{}, resp *http.Response)
 		return false, fmt.Errorf("evaluate CEL expression: %w", err)
 	}
 
-	// Convert result to boolean
 	result, ok := out.Value().(bool)
 	if !ok {
 		return false, fmt.Errorf("CEL expression did not return a boolean value")
@@ -215,7 +214,39 @@ type CheckResult struct {
 	Err     error
 }
 
-func ValidateCheckSet(checks []Check) error {
+// HTTPClient interface allows mocking HTTP requests for testing
+type HTTPClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+// DefaultHTTPClient wraps http.Client to implement HTTPClient interface
+type DefaultHTTPClient struct {
+	Timeout time.Duration
+}
+
+// Do executes an HTTP request using the configured timeout
+func (c *DefaultHTTPClient) Do(req *http.Request) (*http.Response, error) {
+	client := &http.Client{
+		Timeout: c.Timeout,
+	}
+	return client.Do(req)
+}
+
+// MockHTTPClient is a mock implementation of HTTPClient interface
+type MockHTTPClient struct {
+	mock.Mock
+}
+
+// Do mocks the HTTP request execution
+func (m *MockHTTPClient) Do(req *http.Request) (*http.Response, error) {
+	args := m.Called(req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*http.Response), args.Error(1)
+}
+
+func ValidateHTTPCheckSet(checks []HTTPCheck) error {
 	// Deduplicate checks by name and environment.
 	type checkKey struct {
 		Name        string

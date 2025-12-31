@@ -5,10 +5,15 @@ import (
 	"time"
 )
 
+type Checks struct {
+	HTTP []HTTPCheck `yaml:"http"`
+	Ping []PingCheck `yaml:"ping"`
+}
+
 type Config struct {
 	Prometheus   Prometheus    `yaml:"prometheus"`
 	Environments []Environment `yaml:"environments"`
-	Checks       []Check       `yaml:"checks"`
+	Checks       Checks        `yaml:"checks"`
 }
 
 type Prometheus struct {
@@ -25,7 +30,7 @@ type Environment struct {
 	Vars map[string]InterpolatedString `yaml:"vars"`
 }
 
-type Check struct {
+type HTTPCheck struct {
 	Name           string                        `yaml:"name"`
 	Timeout        time.Duration                 `yaml:"timeout"`
 	Interval       time.Duration                 `yaml:"interval"`
@@ -36,6 +41,18 @@ type Check struct {
 	Tags           []string                      `yaml:"tags"`
 	ResponseFormat ResponseFormat                `yaml:"response_format"`
 	Assertion      string                        `yaml:"assertion"`
+}
+
+type PingCheck struct {
+	Name         string             `yaml:"name"`
+	Timeout      time.Duration      `yaml:"timeout"`
+	Count        int                `yaml:"count"`
+	Interval     time.Duration      `yaml:"interval"`
+	Environments []string           `yaml:"environments"`
+	Host         InterpolatedString `yaml:"host"`
+	Tags         []string           `yaml:"tags"`
+	IPStack      string             `yaml:"ip_stack"`
+	Assertion    string             `yaml:"assertion"`
 }
 
 type ResponseFormat string

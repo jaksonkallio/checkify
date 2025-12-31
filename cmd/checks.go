@@ -8,31 +8,14 @@ import (
 	"github.com/messari/checkify/internal/evaluator"
 )
 
-func convertChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.Check, error) {
-	// Set the env interpolator with all env vars.
-	envInterpolator := config.NewInterpolator("env")
-	for _, value := range envProvider.Environ() {
-		parts := strings.SplitN(value, "=", 2)
-		envInterpolator.Set(parts[0], parts[1])
+func convertHTTPChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.HTTPCheck, error) {
+	envInterpolator, varInterpolators, err := setupInterpolators(cfg, envProvider)
+	if err != nil {
+		return nil, err
 	}
 
-	// Set up individual env interpolators for each configured environment.
-	varInterpolators := make(map[string]*config.Interpolator)
-	for _, environment := range cfg.Environments {
-		interpolator := config.NewInterpolator("var")
-		for k, v := range environment.Vars {
-			// Set each var interpolated value using the env interpolator.
-			value := envInterpolator.Interpolate(v)
-			if envInterpolator.ContainsPlaceholder(value) {
-				return nil, fmt.Errorf("environment %q var %q contains uninterpolated placeholder", environment.Name, k)
-			}
-			interpolator.Set(k, value)
-		}
-		varInterpolators[environment.Name] = interpolator
-	}
-
-	var checks []evaluator.Check
-	for _, c := range cfg.Checks {
+	var checks []evaluator.HTTPCheck
+	for _, c := range cfg.Checks.HTTP {
 		for _, envName := range c.Environments {
 			environmentVarsInterpolator := varInterpolators[envName]
 
@@ -51,7 +34,7 @@ func convertChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.Chec
 				return nil, fmt.Errorf("endpoint contains uninterpolated placeholder")
 			}
 
-			check, err := evaluator.NewCheck(
+			check, err := evaluator.NewHTTPCheck(
 				c.Name,
 				endpoint,
 				c.Method,
@@ -64,13 +47,78 @@ func convertChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.Chec
 				c.Assertion,
 			)
 			if err != nil {
-				return nil, fmt.Errorf("create check %s for environment %s: %w", c.Name, envName, err)
+				return nil, fmt.Errorf("create HTTP check %s for environment %s: %w", c.Name, envName, err)
 			}
 
 			checks = append(checks, *check)
 		}
 	}
 	return checks, nil
+}
+
+func convertPingChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.PingCheck, error) {
+	envInterpolator, varInterpolators, err := setupInterpolators(cfg, envProvider)
+	if err != nil {
+		return nil, err
+	}
+
+	var checks []evaluator.PingCheck
+	for _, c := range cfg.Checks.Ping {
+		for _, envName := range c.Environments {
+			environmentVarsInterpolator := varInterpolators[envName]
+
+			interpolatorSet := config.NewInterpolatorSet(envInterpolator, environmentVarsInterpolator)
+
+			host := interpolatorSet.InterpolateMany(c.Host)
+			if interpolatorSet.ContainsPlaceholder(host) {
+				return nil, fmt.Errorf("host contains uninterpolated placeholder")
+			}
+
+			check, err := evaluator.NewPingCheck(
+				c.Name,
+				host,
+				c.Interval,
+				c.Count,
+				c.Timeout,
+				envName,
+				c.Tags,
+				evaluator.IPStack(strings.ToLower(c.IPStack)),
+				c.Assertion,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("create Ping check %s for environment %s: %w", c.Name, envName, err)
+			}
+
+			checks = append(checks, *check)
+		}
+	}
+	return checks, nil
+}
+
+func setupInterpolators(cfg config.Config, envProvider EnvProvider) (*config.Interpolator, map[string]*config.Interpolator, error) {
+	// Set the env interpolator with all env vars.
+	envInterpolator := config.NewInterpolator("env")
+	for _, value := range envProvider.Environ() {
+		parts := strings.SplitN(value, "=", 2)
+		envInterpolator.Set(parts[0], parts[1])
+	}
+
+	// Set up individual env interpolators for each configured environment.
+	varInterpolators := make(map[string]*config.Interpolator)
+	for _, environment := range cfg.Environments {
+		interpolator := config.NewInterpolator("var")
+		for k, v := range environment.Vars {
+			// Set each var interpolated value using the env interpolator.
+			value := envInterpolator.Interpolate(v)
+			if envInterpolator.ContainsPlaceholder(value) {
+				return nil, nil, fmt.Errorf("environment %q var %q contains uninterpolated placeholder", environment.Name, k)
+			}
+			interpolator.Set(k, value)
+		}
+		varInterpolators[environment.Name] = interpolator
+	}
+
+	return envInterpolator, varInterpolators, nil
 }
 
 func convertResponseFormat(format config.ResponseFormat) evaluator.ResponseFormat {

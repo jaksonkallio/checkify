@@ -22,16 +22,26 @@ environments:
 
 # Checks are the actual checks that will be evaluated at the configured intervals.
 checks:
-  - name: api-gateway-ping
-    environments: [prod, stage]
-    endpoint: "${var.base_url}/ping"
-    method: GET
-    headers:
-      Authorization: "Bearer ${var.my_api_token}"
-    interval: 30s
-    timeout: 5s
-    tags: [health, api-gateway]
-    response_format: string
-    assertion: |
-      code == 200 &&
-      body == "pong"
+  http:
+    - name: api-gateway-ping
+      environments: [prod, stage]
+      endpoint: "${var.base_url}/ping"
+      method: GET
+      headers:
+        Authorization: "Bearer ${var.my_api_token}"
+      interval: 30s
+      timeout: 5s
+      tags: [health, api-gateway]
+      response_format: string
+      assertion: |
+        code == 200 &&
+        body == "pong"
+  ping:
+    - name: google
+      environments: [prod]
+      host: google.com
+      count: 4
+      timeout: 5s
+      interval: 2m
+      tags: [health, external-service]
+      assertion: packets_received > 0 && packet_loss_pct < 20.0 && avg_rtt_ms < 2000

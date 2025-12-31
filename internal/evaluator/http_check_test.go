@@ -14,9 +14,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewCheck(t *testing.T) {
+func TestNewHTTPCheck(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		check, err := NewCheck(
+		check, err := NewHTTPCheck(
 			"test-check",
 			"https://api.test.com/health",
 			"GET",
@@ -45,7 +45,7 @@ func TestNewCheck(t *testing.T) {
 	})
 
 	t.Run("EmptyAssertion", func(t *testing.T) {
-		check, err := NewCheck(
+		check, err := NewHTTPCheck(
 			"test-check",
 			"https://api.test.com/health",
 			"GET",
@@ -64,7 +64,7 @@ func TestNewCheck(t *testing.T) {
 	})
 
 	t.Run("InvalidCEL", func(t *testing.T) {
-		_, err := NewCheck(
+		_, err := NewHTTPCheck(
 			"test-check",
 			"https://api.test.com/health",
 			"GET",
@@ -94,7 +94,7 @@ func TestCheck_Evaluate(t *testing.T) {
 				Header:     http.Header{},
 			}, nil)
 
-			check, err := NewCheck(
+			check, err := NewHTTPCheck(
 				"test",
 				"https://api.test.com/health",
 				"GET",
@@ -125,7 +125,7 @@ func TestCheck_Evaluate(t *testing.T) {
 				Header:     http.Header{},
 			}, nil)
 
-			check, err := NewCheck(
+			check, err := NewHTTPCheck(
 				"test",
 				"https://api.test.com/ping",
 				"GET",
@@ -155,7 +155,7 @@ func TestCheck_Evaluate(t *testing.T) {
 				Header:     http.Header{},
 			}, nil)
 
-			check, err := NewCheck(
+			check, err := NewHTTPCheck(
 				"test",
 				"https://api.test.com/file",
 				"GET",
@@ -185,7 +185,7 @@ func TestCheck_Evaluate(t *testing.T) {
 				Header:     http.Header{},
 			}, nil)
 
-			check, err := NewCheck(
+			check, err := NewHTTPCheck(
 				"test",
 				"https://api.test.com/action",
 				"POST",
@@ -216,7 +216,7 @@ func TestCheck_Evaluate(t *testing.T) {
 			Header:     http.Header{},
 		}, nil)
 
-		check, err := NewCheck(
+		check, err := NewHTTPCheck(
 			"test",
 			"https://api.test.com/health",
 			"GET",
@@ -242,7 +242,7 @@ func TestCheck_Evaluate(t *testing.T) {
 		mockClient := new(MockHTTPClient)
 		mockClient.On("Do", mock.Anything).Return(nil, errors.New("connection refused"))
 
-		check, err := NewCheck(
+		check, err := NewHTTPCheck(
 			"test",
 			"https://api.test.com/health",
 			"GET",
@@ -273,7 +273,7 @@ func TestCheck_Evaluate(t *testing.T) {
 			Header:     http.Header{},
 		}, nil)
 
-		check, err := NewCheck(
+		check, err := NewHTTPCheck(
 			"test",
 			"https://api.test.com/health",
 			"GET",
@@ -308,7 +308,7 @@ func TestCheck_Evaluate(t *testing.T) {
 				},
 			}, nil)
 
-			check, err := NewCheck(
+			check, err := NewHTTPCheck(
 				"test",
 				"https://api.test.com/health",
 				"GET",
@@ -338,7 +338,7 @@ func TestCheck_Evaluate(t *testing.T) {
 				Header:     http.Header{},
 			}, nil)
 
-			check, err := NewCheck(
+			check, err := NewHTTPCheck(
 				"test",
 				"https://api.test.com/create",
 				"POST",
@@ -368,7 +368,7 @@ func TestCheck_Evaluate(t *testing.T) {
 				Header:     http.Header{},
 			}, nil)
 
-			check, err := NewCheck(
+			check, err := NewHTTPCheck(
 				"test",
 				"https://api.test.com/users",
 				"GET",
@@ -402,7 +402,7 @@ func TestCheck_Evaluate(t *testing.T) {
 			Header:     http.Header{},
 		}, nil)
 
-		check, err := NewCheck(
+		check, err := NewHTTPCheck(
 			"test",
 			"https://api.test.com/auth",
 			"GET",
@@ -438,7 +438,7 @@ func TestCheck_Evaluate(t *testing.T) {
 			Header:     http.Header{},
 		}, nil)
 
-		check, err := NewCheck(
+		check, err := NewHTTPCheck(
 			"test",
 			"https://api.test.com/health",
 			"GET",
@@ -467,7 +467,7 @@ func TestCheck_Evaluate(t *testing.T) {
 			Header:     http.Header{},
 		}, nil)
 
-		check, err := NewCheck(
+		check, err := NewHTTPCheck(
 			"test",
 			"https://api.test.com/health",
 			"GET",
@@ -493,7 +493,7 @@ func TestCheck_Evaluate(t *testing.T) {
 
 func TestCheck_sendCheckRequest(t *testing.T) {
 	t.Run("NegativeTimeout", func(t *testing.T) {
-		check, err := NewCheck(
+		check, err := NewHTTPCheck(
 			"test",
 			"https://api.test.com/health",
 			"GET",
@@ -516,7 +516,7 @@ func TestCheck_sendCheckRequest(t *testing.T) {
 	})
 
 	t.Run("ZeroTimeout", func(t *testing.T) {
-		check, err := NewCheck(
+		check, err := NewHTTPCheck(
 			"test",
 			"https://api.test.com/health",
 			"GET",
@@ -541,7 +541,7 @@ func TestCheck_sendCheckRequest(t *testing.T) {
 
 func TestCheck_evaluateAssertion(t *testing.T) {
 	t.Run("NonBooleanResult", func(t *testing.T) {
-		check, err := NewCheck(
+		check, err := NewHTTPCheck(
 			"test",
 			"https://api.test.com/health",
 			"GET",
@@ -568,26 +568,26 @@ func TestCheck_evaluateAssertion(t *testing.T) {
 	})
 }
 
-func TestValidateCheckSet(t *testing.T) {
+func TestValidateHTTPCheckSet(t *testing.T) {
 	t.Run("NoDuplicates", func(t *testing.T) {
-		checks := []Check{
+		checks := []HTTPCheck{
 			{Name: "check1", Environment: "prod"},
 			{Name: "check2", Environment: "prod"},
 			{Name: "check1", Environment: "stage"}, // Same name, different env - OK
 		}
 
-		err := ValidateCheckSet(checks)
+		err := ValidateHTTPCheckSet(checks)
 
 		assert.NoError(t, err)
 	})
 
 	t.Run("DuplicateNameAndEnv", func(t *testing.T) {
-		checks := []Check{
+		checks := []HTTPCheck{
 			{Name: "check1", Environment: "prod"},
 			{Name: "check1", Environment: "prod"}, // Duplicate
 		}
 
-		err := ValidateCheckSet(checks)
+		err := ValidateHTTPCheckSet(checks)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "duplicate check key")
@@ -596,21 +596,21 @@ func TestValidateCheckSet(t *testing.T) {
 	})
 
 	t.Run("SameNameDifferentEnv", func(t *testing.T) {
-		checks := []Check{
+		checks := []HTTPCheck{
 			{Name: "api-health", Environment: "prod"},
 			{Name: "api-health", Environment: "stage"},
 			{Name: "api-health", Environment: "dev"},
 		}
 
-		err := ValidateCheckSet(checks)
+		err := ValidateHTTPCheckSet(checks)
 
 		assert.NoError(t, err)
 	})
 
 	t.Run("EmptySet", func(t *testing.T) {
-		checks := []Check{}
+		checks := []HTTPCheck{}
 
-		err := ValidateCheckSet(checks)
+		err := ValidateHTTPCheckSet(checks)
 
 		assert.NoError(t, err)
 	})
