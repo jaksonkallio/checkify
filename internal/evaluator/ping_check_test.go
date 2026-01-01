@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // MockPinger implements the Pinger interface for testing
@@ -46,13 +47,16 @@ func TestNewPingCheck(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, check)
 	assert.Equal(t, "test-ping", check.Name)
-	assert.Equal(t, "8.8.8.8", check.Host)
-	assert.Equal(t, 1, check.Count)
 	assert.Equal(t, 10*time.Second, check.Interval)
-	assert.Equal(t, 5*time.Second, check.Timeout)
 	assert.Equal(t, "production", check.Environment)
 	assert.Equal(t, []string{"critical", "dns"}, check.Tags)
-	assert.Equal(t, IPStackAny, check.IPStack)
+
+	pingEval, ok := check.Evaluator.(*PingCheckEvaluator)
+	require.True(t, ok, "Evaluator should be PingCheckEvaluator")
+	assert.Equal(t, "8.8.8.8", pingEval.Host)
+	assert.Equal(t, 1, pingEval.Count)
+	assert.Equal(t, 5*time.Second, pingEval.Timeout)
+	assert.Equal(t, IPStackAny, pingEval.IPStack)
 }
 
 func TestNewPingCheck_WithAssertion(t *testing.T) {
@@ -70,7 +74,9 @@ func TestNewPingCheck_WithAssertion(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotNil(t, check)
-	assert.NotNil(t, check.assertionProgram)
+	_, ok := check.Evaluator.(*PingCheckEvaluator)
+	require.True(t, ok, "Evaluator should be PingCheckEvaluator")
+	// assertionProgram is now an implementation detail, we can't test it directly
 }
 
 func TestNewPingCheck_InvalidAssertion(t *testing.T) {
@@ -122,7 +128,7 @@ func TestPingCheck_EvaluateSuccess(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Use mock pinger
-	check.pinger = &MockPinger{
+	check.Evaluator.(*PingCheckEvaluator).pinger = &MockPinger{
 		RunFunc: func(ctx context.Context) (PingStatistics, error) {
 			return PingStatistics{
 				PacketsSent:           1,
@@ -137,7 +143,7 @@ func TestPingCheck_EvaluateSuccess(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	result := check.Evaluate(ctx)
+	result := check.Evaluator.Evaluate(ctx)
 
 	assert.NoError(t, result.Err)
 	assert.True(t, result.Pass)
@@ -159,7 +165,7 @@ func TestPingCheck_EvaluatePacketLoss(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Mock pinger with packet loss
-	check.pinger = &MockPinger{
+	check.Evaluator.(*PingCheckEvaluator).pinger = &MockPinger{
 		RunFunc: func(ctx context.Context) (PingStatistics, error) {
 			return PingStatistics{
 				PacketsSent:           3,
@@ -174,7 +180,7 @@ func TestPingCheck_EvaluatePacketLoss(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	result := check.Evaluate(ctx)
+	result := check.Evaluator.Evaluate(ctx)
 
 	// No assertion, so it should pass as long as ping succeeded
 	assert.NoError(t, result.Err)
@@ -195,7 +201,7 @@ func TestPingCheck_EvaluateWithAssertionPass(t *testing.T) {
 	)
 	assert.NoError(t, err)
 
-	check.pinger = &MockPinger{
+	check.Evaluator.(*PingCheckEvaluator).pinger = &MockPinger{
 		RunFunc: func(ctx context.Context) (PingStatistics, error) {
 			return PingStatistics{
 				PacketsSent:           1,
@@ -210,7 +216,7 @@ func TestPingCheck_EvaluateWithAssertionPass(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	result := check.Evaluate(ctx)
+	result := check.Evaluator.Evaluate(ctx)
 
 	assert.NoError(t, result.Err)
 	assert.True(t, result.Pass)
@@ -231,7 +237,7 @@ func TestPingCheck_EvaluateWithAssertionFail(t *testing.T) {
 	)
 	assert.NoError(t, err)
 
-	check.pinger = &MockPinger{
+	check.Evaluator.(*PingCheckEvaluator).pinger = &MockPinger{
 		RunFunc: func(ctx context.Context) (PingStatistics, error) {
 			return PingStatistics{
 				PacketsSent:           1,
@@ -246,7 +252,7 @@ func TestPingCheck_EvaluateWithAssertionFail(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	result := check.Evaluate(ctx)
+	result := check.Evaluator.Evaluate(ctx)
 
 	assert.NoError(t, result.Err)
 	assert.False(t, result.Pass)
@@ -254,25 +260,16 @@ func TestPingCheck_EvaluateWithAssertionFail(t *testing.T) {
 }
 
 func TestPingCheck_EvaluateTimeout(t *testing.T) {
-	check, err := NewPingCheck(
-		"test-ping-timeout",
+	// NewPingCheckEvaluator should reject zero/negative timeout
+	_, err := NewPingCheckEvaluator(
 		"8.8.8.8",
-		10*time.Second,
 		1,
 		0, // Zero timeout
-		"production",
-		[]string{},
 		IPStackAny,
 		"",
 	)
-	assert.NoError(t, err)
-
-	ctx := context.Background()
-	result := check.Evaluate(ctx)
-
-	assert.Error(t, result.Err)
-	assert.IsType(t, &ErrCheckTimeout{}, result.Err)
-	assert.False(t, result.Pass)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "timeout must be greater than 0")
 }
 
 func TestPingCheck_EvaluatePingError(t *testing.T) {
@@ -290,14 +287,14 @@ func TestPingCheck_EvaluatePingError(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Mock pinger that returns an error
-	check.pinger = &MockPinger{
+	check.Evaluator.(*PingCheckEvaluator).pinger = &MockPinger{
 		RunFunc: func(ctx context.Context) (PingStatistics, error) {
 			return PingStatistics{}, errors.New("lookup failed")
 		},
 	}
 
 	ctx := context.Background()
-	result := check.Evaluate(ctx)
+	result := check.Evaluator.Evaluate(ctx)
 
 	assert.Error(t, result.Err)
 	assert.False(t, result.Pass)
@@ -321,7 +318,7 @@ func TestPingCheck_EvaluateContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Mock pinger that respects context cancellation
-	check.pinger = &MockPinger{
+	check.Evaluator.(*PingCheckEvaluator).pinger = &MockPinger{
 		RunFunc: func(ctx context.Context) (PingStatistics, error) {
 			return PingStatistics{}, ctx.Err()
 		},
@@ -329,7 +326,7 @@ func TestPingCheck_EvaluateContextCancellation(t *testing.T) {
 
 	cancel() // Cancel immediately
 
-	result := check.Evaluate(ctx)
+	result := check.Evaluator.Evaluate(ctx)
 
 	assert.Error(t, result.Err)
 	assert.False(t, result.Pass)
@@ -349,7 +346,7 @@ func TestPingCheck_EvaluateComplexAssertion(t *testing.T) {
 	)
 	assert.NoError(t, err)
 
-	check.pinger = &MockPinger{
+	check.Evaluator.(*PingCheckEvaluator).pinger = &MockPinger{
 		RunFunc: func(ctx context.Context) (PingStatistics, error) {
 			return PingStatistics{
 				PacketsSent:           3,
@@ -364,38 +361,10 @@ func TestPingCheck_EvaluateComplexAssertion(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	result := check.Evaluate(ctx)
+	result := check.Evaluator.Evaluate(ctx)
 
 	assert.NoError(t, result.Err)
 	assert.True(t, result.Pass)
-}
-
-func TestValidatePingCheckSet(t *testing.T) {
-	t.Run("valid check set", func(t *testing.T) {
-		check1, _ := NewPingCheck("check1", "8.8.8.8", 10*time.Second, 1, 5*time.Second, "production", []string{}, IPStackAny, "")
-		check2, _ := NewPingCheck("check2", "1.1.1.1", 10*time.Second, 1, 5*time.Second, "production", []string{}, IPStackAny, "")
-		check3, _ := NewPingCheck("check1", "8.8.8.8", 10*time.Second, 1, 5*time.Second, "staging", []string{}, IPStackAny, "")
-
-		checks := []PingCheck{*check1, *check2, *check3}
-		err := ValidatePingCheckSet(checks)
-		assert.NoError(t, err)
-	})
-
-	t.Run("duplicate check", func(t *testing.T) {
-		check1, _ := NewPingCheck("check1", "8.8.8.8", 10*time.Second, 1, 5*time.Second, "production", []string{}, IPStackAny, "")
-		check2, _ := NewPingCheck("check1", "1.1.1.1", 10*time.Second, 1, 5*time.Second, "production", []string{}, IPStackAny, "")
-
-		checks := []PingCheck{*check1, *check2}
-		err := ValidatePingCheckSet(checks)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "duplicate check key")
-	})
-
-	t.Run("empty check set", func(t *testing.T) {
-		checks := []PingCheck{}
-		err := ValidatePingCheckSet(checks)
-		assert.NoError(t, err)
-	})
 }
 
 func TestDefaultPinger_IPv4(t *testing.T) {

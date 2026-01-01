@@ -14,6 +14,9 @@ const (
 	IPStackIPv6    IPStack = "ipv6"
 	IPStackAny     IPStack = "any"
 	IPStackDefault IPStack = IPStackAny
+
+	MaxPingTimeout = 5 * time.Minute
+	MaxPingCount   = 1000
 )
 
 type IPStack string
@@ -78,21 +81,43 @@ func (p *DefaultPinger) Run(ctx context.Context) (PingStatistics, error) {
 	}, nil
 }
 
-type PingCheck struct {
-	Name             string
+type PingCheckEvaluator struct {
+	Host             string
 	Count            int
 	Timeout          time.Duration
-	Interval         time.Duration
-	Environment      string
-	Host             string
-	Tags             []string
-	Assertion        string
 	IPStack          IPStack
 	assertionProgram cel.Program
 	pinger           Pinger
 }
 
-func NewPingCheck(name string, host string, interval time.Duration, count int, timeout time.Duration, environment string, tags []string, ipStack IPStack, assertion string) (*PingCheck, error) {
+func NewPingCheckEvaluator(
+	host string,
+	count int,
+	timeout time.Duration,
+	ipStack IPStack,
+	assertion string,
+) (*PingCheckEvaluator, error) {
+	if len(host) == 0 {
+		return nil, fmt.Errorf("host cannot be empty")
+	}
+
+	if count <= 0 || count > MaxPingCount {
+		return nil, fmt.Errorf("count must be greater than 0 and less than %d", MaxPingCount)
+	}
+
+	if timeout <= 0 || timeout > MaxPingTimeout {
+		return nil, fmt.Errorf("timeout must be greater than 0 and less than %s", MaxPingTimeout)
+	}
+
+	if ipStack == "" {
+		ipStack = IPStackDefault
+	}
+	switch ipStack {
+	case IPStackIPv4, IPStackIPv6, IPStackAny:
+	default:
+		return nil, fmt.Errorf("unsupported IP stack %q", ipStack)
+	}
+
 	// Compile CEL assertion program if provided
 	var assertionProgram cel.Program
 	if assertion != "" {
@@ -122,25 +147,11 @@ func NewPingCheck(name string, host string, interval time.Duration, count int, t
 		assertionProgram = prg
 	}
 
-	if ipStack == "" {
-		ipStack = IPStackDefault
-	}
-	switch ipStack {
-	case IPStackIPv4, IPStackIPv6, IPStackAny:
-	default:
-		return nil, fmt.Errorf("unsupported IP stack %q", ipStack)
-	}
-
-	check := &PingCheck{
-		Name:             name,
+	evaluator := &PingCheckEvaluator{
 		Host:             host,
 		Count:            count,
-		Interval:         interval,
 		Timeout:          timeout,
-		Environment:      environment,
-		Tags:             tags,
 		IPStack:          ipStack,
-		Assertion:        assertion,
 		assertionProgram: assertionProgram,
 		pinger: &DefaultPinger{
 			Host:    host,
@@ -150,11 +161,21 @@ func NewPingCheck(name string, host string, interval time.Duration, count int, t
 		},
 	}
 
-	return check, nil
+	return evaluator, nil
+}
+
+// NewPingCheck is a convenience constructor that creates both the evaluator and the Check
+func NewPingCheck(name string, host string, interval time.Duration, count int, timeout time.Duration, environment string, tags []string, ipStack IPStack, assertion string) (Check, error) {
+	evaluator, err := NewPingCheckEvaluator(host, count, timeout, ipStack, assertion)
+	if err != nil {
+		return Check{}, fmt.Errorf("create ping check evaluator: %w", err)
+	}
+
+	return NewCheck(name, environment, interval, tags, evaluator), nil
 }
 
 // Evaluate performs an ICMP ping to the configured host and returns the result.
-func (c *PingCheck) Evaluate(ctx context.Context) CheckResult {
+func (c *PingCheckEvaluator) Evaluate(ctx context.Context) CheckResult {
 	if c.Timeout <= 0 {
 		// Negative or zero timeout means guaranteed to timeout, no need to send request.
 		return CheckResult{
@@ -197,7 +218,7 @@ func (c *PingCheck) Evaluate(ctx context.Context) CheckResult {
 }
 
 // evaluateAssertion evaluates the CEL assertion against the ping statistics using the pre-compiled program.
-func (c *PingCheck) evaluateAssertion(stats PingStatistics) (bool, error) {
+func (c *PingCheckEvaluator) evaluateAssertion(stats PingStatistics) (bool, error) {
 	out, _, err := c.assertionProgram.Eval(map[string]any{
 		"avg_rtt_ms":           int(stats.AvgRtt.Milliseconds()),
 		"max_rtt_ms":           int(stats.MaxRtt.Milliseconds()),
@@ -217,24 +238,4 @@ func (c *PingCheck) evaluateAssertion(stats PingStatistics) (bool, error) {
 	}
 
 	return result, nil
-}
-
-func ValidatePingCheckSet(checks []PingCheck) error {
-	// Deduplicate checks by name and environment.
-	type checkKey struct {
-		Name        string
-		Environment string
-	}
-	checkNames := make(map[checkKey]struct{})
-	for _, check := range checks {
-		key := checkKey{
-			Name:        check.Name,
-			Environment: check.Environment,
-		}
-		if _, exists := checkNames[key]; exists {
-			return fmt.Errorf("duplicate check key with name %q in environment %q", check.Name, check.Environment)
-		}
-		checkNames[key] = struct{}{}
-	}
-	return nil
 }

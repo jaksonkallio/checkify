@@ -19,6 +19,8 @@ const (
 	FormatString ResponseFormat = "string"
 	FormatBinary ResponseFormat = "binary"
 	FormatNone   ResponseFormat = "none"
+
+	MaxHTTPTimeout = 30 * time.Minute
 )
 
 type ErrCheckTimeout struct {
@@ -33,37 +35,39 @@ func (e *ErrCheckTimeout) Error() string {
 	return fmt.Sprintf("check timed out after %s", e.Timeout)
 }
 
-type HTTPCheck struct {
-	Name           string
-	Timeout        time.Duration
-	Interval       time.Duration
-	Environment    string
-	Endpoint       string
-	Method         string
-	Headers        map[string]string
-	Tags           []string
-	ResponseFormat ResponseFormat
-	Assertion      string
-	celProgram     cel.Program
-	httpClient     HTTPClient
+type HTTPCheckEvaluator struct {
+	Method           string
+	Endpoint         string
+	Headers          map[string]string
+	Timeout          time.Duration
+	ResponseFormat   ResponseFormat
+	assertionProgram cel.Program
+	httpClient       HTTPClient
 }
 
-func NewHTTPCheck(name string, endpoint string, method string, interval time.Duration, timeout time.Duration, environment string, headers map[string]string, tags []string, responseFormat ResponseFormat, assertion string) (*HTTPCheck, error) {
-	check := &HTTPCheck{
-		Name:           name,
-		Endpoint:       endpoint,
-		Method:         method,
-		Interval:       interval,
-		Timeout:        timeout,
-		Environment:    environment,
-		Headers:        headers,
-		Tags:           tags,
-		ResponseFormat: responseFormat,
-		Assertion:      assertion,
-		httpClient:     &DefaultHTTPClient{Timeout: timeout},
+func NewHTTPCheckEvaluator(endpoint string, method string, timeout time.Duration, headers map[string]string, responseFormat ResponseFormat, assertion string) (*HTTPCheckEvaluator, error) {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch, http.MethodOptions:
+	default:
+		return nil, fmt.Errorf("unsupported HTTP method %q", method)
+	}
+
+	if len(endpoint) == 0 {
+		return nil, fmt.Errorf("endpoint cannot be empty")
+	}
+
+	if timeout <= 0 || timeout > MaxHTTPTimeout {
+		return nil, fmt.Errorf("timeout must be greater than 0 and less than %s", MaxHTTPTimeout)
+	}
+
+	switch responseFormat {
+	case FormatJSON, FormatString, FormatBinary, FormatNone:
+	default:
+		return nil, fmt.Errorf("unsupported response format %q", responseFormat)
 	}
 
 	// Compile CEL assertion program if provided
+	var assertionProgram cel.Program
 	if assertion != "" {
 		env, err := cel.NewEnv(
 			cel.Variable("body", cel.DynType),
@@ -84,14 +88,32 @@ func NewHTTPCheck(name string, endpoint string, method string, interval time.Dur
 			return nil, fmt.Errorf("create CEL program: %w", err)
 		}
 
-		check.celProgram = prg
+		assertionProgram = prg
 	}
 
-	return check, nil
+	return &HTTPCheckEvaluator{
+		Endpoint:         endpoint,
+		Method:           method,
+		Timeout:          timeout,
+		Headers:          headers,
+		ResponseFormat:   responseFormat,
+		assertionProgram: assertionProgram,
+		httpClient:       &DefaultHTTPClient{Timeout: timeout},
+	}, nil
+}
+
+// NewHTTPCheck is a convenience constructor that creates both the evaluator and the Check
+func NewHTTPCheck(name string, endpoint string, method string, interval time.Duration, timeout time.Duration, environment string, headers map[string]string, tags []string, responseFormat ResponseFormat, assertion string) (Check, error) {
+	evaluator, err := NewHTTPCheckEvaluator(endpoint, method, timeout, headers, responseFormat, assertion)
+	if err != nil {
+		return Check{}, fmt.Errorf("create HTTP check evaluator: %w", err)
+	}
+
+	return NewCheck(name, environment, interval, tags, evaluator), nil
 }
 
 // Evaluate will perform the check and evaluate its assertion, returning an non-pass if the request or assertion failed.
-func (c *HTTPCheck) Evaluate(ctx context.Context) CheckResult {
+func (c *HTTPCheckEvaluator) Evaluate(ctx context.Context) CheckResult {
 	resp, latency, err := c.sendCheckRequest(ctx)
 	if err != nil {
 		return CheckResult{
@@ -131,7 +153,7 @@ func (c *HTTPCheck) Evaluate(ctx context.Context) CheckResult {
 	}
 
 	var pass bool
-	if c.Assertion != "" {
+	if c.assertionProgram != nil {
 		assertionPasses, err := c.evaluateAssertion(responseData, resp)
 		if err != nil {
 			return CheckResult{
@@ -151,7 +173,7 @@ func (c *HTTPCheck) Evaluate(ctx context.Context) CheckResult {
 	}
 }
 
-func (c *HTTPCheck) sendCheckRequest(ctx context.Context) (*http.Response, time.Duration, error) {
+func (c *HTTPCheckEvaluator) sendCheckRequest(ctx context.Context) (*http.Response, time.Duration, error) {
 	// Create HTTP request with context for cancellation support
 	req, err := http.NewRequestWithContext(ctx, c.Method, c.Endpoint, nil)
 	if err != nil {
@@ -182,7 +204,7 @@ func (c *HTTPCheck) sendCheckRequest(ctx context.Context) (*http.Response, time.
 }
 
 // evaluateAssertion evaluates the CEL assertion against the response using the pre-compiled program
-func (c *HTTPCheck) evaluateAssertion(responseData interface{}, resp *http.Response) (bool, error) {
+func (c *HTTPCheckEvaluator) evaluateAssertion(responseData interface{}, resp *http.Response) (bool, error) {
 	// Convert headers to map[string]string
 	headers := make(map[string]string)
 	for key, values := range resp.Header {
@@ -191,7 +213,7 @@ func (c *HTTPCheck) evaluateAssertion(responseData interface{}, resp *http.Respo
 		}
 	}
 
-	out, _, err := c.celProgram.Eval(map[string]interface{}{
+	out, _, err := c.assertionProgram.Eval(map[string]interface{}{
 		"body":    responseData,
 		"code":    int64(resp.StatusCode),
 		"headers": headers,
@@ -244,24 +266,4 @@ func (m *MockHTTPClient) Do(req *http.Request) (*http.Response, error) {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*http.Response), args.Error(1)
-}
-
-func ValidateHTTPCheckSet(checks []HTTPCheck) error {
-	// Deduplicate checks by name and environment.
-	type checkKey struct {
-		Name        string
-		Environment string
-	}
-	checkNames := make(map[checkKey]struct{})
-	for _, check := range checks {
-		key := checkKey{
-			Name:        check.Name,
-			Environment: check.Environment,
-		}
-		if _, exists := checkNames[key]; exists {
-			return fmt.Errorf("duplicate check key with name %q in environment %q", check.Name, check.Environment)
-		}
-		checkNames[key] = struct{}{}
-	}
-	return nil
 }

@@ -8,13 +8,13 @@ import (
 	"github.com/messari/checkify/internal/evaluator"
 )
 
-func convertHTTPChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.HTTPCheck, error) {
+func convertHTTPChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.Check, error) {
 	envInterpolator, varInterpolators, err := setupInterpolators(cfg, envProvider)
 	if err != nil {
 		return nil, err
 	}
 
-	var checks []evaluator.HTTPCheck
+	var checks []evaluator.Check
 	for _, c := range cfg.Checks.HTTP {
 		for _, envName := range c.Environments {
 			environmentVarsInterpolator := varInterpolators[envName]
@@ -50,19 +50,19 @@ func convertHTTPChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.
 				return nil, fmt.Errorf("create HTTP check %s for environment %s: %w", c.Name, envName, err)
 			}
 
-			checks = append(checks, *check)
+			checks = append(checks, check)
 		}
 	}
 	return checks, nil
 }
 
-func convertPingChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.PingCheck, error) {
+func convertPingChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.Check, error) {
 	envInterpolator, varInterpolators, err := setupInterpolators(cfg, envProvider)
 	if err != nil {
 		return nil, err
 	}
 
-	var checks []evaluator.PingCheck
+	var checks []evaluator.Check
 	for _, c := range cfg.Checks.Ping {
 		for _, envName := range c.Environments {
 			environmentVarsInterpolator := varInterpolators[envName]
@@ -89,7 +89,7 @@ func convertPingChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.
 				return nil, fmt.Errorf("create Ping check %s for environment %s: %w", c.Name, envName, err)
 			}
 
-			checks = append(checks, *check)
+			checks = append(checks, check)
 		}
 	}
 	return checks, nil

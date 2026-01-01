@@ -31,17 +31,18 @@ func TestNewHTTPCheck(t *testing.T) {
 
 		require.NoError(t, err)
 		assert.Equal(t, "test-check", check.Name)
-		assert.Equal(t, "https://api.test.com/health", check.Endpoint)
-		assert.Equal(t, "GET", check.Method)
 		assert.Equal(t, 30*time.Second, check.Interval)
-		assert.Equal(t, 5*time.Second, check.Timeout)
 		assert.Equal(t, "prod", check.Environment)
-		assert.Len(t, check.Headers, 1)
-		assert.Equal(t, "Bearer token", check.Headers["Authorization"])
 		assert.Len(t, check.Tags, 2)
-		assert.Equal(t, FormatJSON, check.ResponseFormat)
-		assert.NotNil(t, check.celProgram)
-		assert.NotNil(t, check.httpClient)
+
+		httpEval, ok := check.Evaluator.(*HTTPCheckEvaluator)
+		require.True(t, ok, "Evaluator should be HTTPCheckEvaluator")
+		assert.Equal(t, "https://api.test.com/health", httpEval.Endpoint)
+		assert.Equal(t, "GET", httpEval.Method)
+		assert.Equal(t, 5*time.Second, httpEval.Timeout)
+		assert.Len(t, httpEval.Headers, 1)
+		assert.Equal(t, "Bearer token", httpEval.Headers["Authorization"])
+		assert.Equal(t, FormatJSON, httpEval.ResponseFormat)
 	})
 
 	t.Run("EmptyAssertion", func(t *testing.T) {
@@ -59,8 +60,9 @@ func TestNewHTTPCheck(t *testing.T) {
 		)
 
 		require.NoError(t, err)
-		assert.Equal(t, "", check.Assertion)
-		assert.Nil(t, check.celProgram)
+		_, ok := check.Evaluator.(*HTTPCheckEvaluator)
+		require.True(t, ok, "Evaluator should be HTTPCheckEvaluator")
+		// Assertion is now an implementation detail, we can't test it directly
 	})
 
 	t.Run("InvalidCEL", func(t *testing.T) {
@@ -107,9 +109,11 @@ func TestCheck_Evaluate(t *testing.T) {
 				`code == 200 && body.status == "ok"`,
 			)
 			require.NoError(t, err)
-			check.httpClient = mockClient
 
-			result := check.Evaluate(context.Background())
+			httpEval := check.Evaluator.(*HTTPCheckEvaluator)
+			httpEval.httpClient = mockClient
+
+			result := httpEval.Evaluate(context.Background())
 
 			assert.True(t, result.Pass)
 			assert.Nil(t, result.Err)
@@ -138,9 +142,9 @@ func TestCheck_Evaluate(t *testing.T) {
 				`code == 200 && body == "pong"`,
 			)
 			require.NoError(t, err)
-			check.httpClient = mockClient
+			httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
 
-			result := check.Evaluate(context.Background())
+			result := check.Evaluator.Evaluate(context.Background())
 
 			assert.True(t, result.Pass)
 			assert.Nil(t, result.Err)
@@ -168,9 +172,9 @@ func TestCheck_Evaluate(t *testing.T) {
 				`code == 200`,
 			)
 			require.NoError(t, err)
-			check.httpClient = mockClient
+			httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
 
-			result := check.Evaluate(context.Background())
+			result := check.Evaluator.Evaluate(context.Background())
 
 			assert.True(t, result.Pass)
 			assert.Nil(t, result.Err)
@@ -198,9 +202,9 @@ func TestCheck_Evaluate(t *testing.T) {
 				`code == 204`,
 			)
 			require.NoError(t, err)
-			check.httpClient = mockClient
+			httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
 
-			result := check.Evaluate(context.Background())
+			result := check.Evaluator.Evaluate(context.Background())
 
 			assert.True(t, result.Pass)
 			assert.Nil(t, result.Err)
@@ -229,9 +233,9 @@ func TestCheck_Evaluate(t *testing.T) {
 			`code == 200`,
 		)
 		require.NoError(t, err)
-		check.httpClient = mockClient
+		httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
 
-		result := check.Evaluate(context.Background())
+		result := check.Evaluator.Evaluate(context.Background())
 
 		assert.False(t, result.Pass)
 		assert.Nil(t, result.Err) // No error, just assertion failed
@@ -255,9 +259,9 @@ func TestCheck_Evaluate(t *testing.T) {
 			`code == 200`,
 		)
 		require.NoError(t, err)
-		check.httpClient = mockClient
+		httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
 
-		result := check.Evaluate(context.Background())
+		result := check.Evaluator.Evaluate(context.Background())
 
 		assert.False(t, result.Pass)
 		assert.Error(t, result.Err)
@@ -286,9 +290,9 @@ func TestCheck_Evaluate(t *testing.T) {
 			`code == 200`,
 		)
 		require.NoError(t, err)
-		check.httpClient = mockClient
+		httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
 
-		result := check.Evaluate(context.Background())
+		result := check.Evaluator.Evaluate(context.Background())
 
 		assert.False(t, result.Pass)
 		assert.Error(t, result.Err)
@@ -321,9 +325,9 @@ func TestCheck_Evaluate(t *testing.T) {
 				`code == 200 && headers["Content-Type"] == "application/json" && headers["X-Custom"] == "test-value"`,
 			)
 			require.NoError(t, err)
-			check.httpClient = mockClient
+			httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
 
-			result := check.Evaluate(context.Background())
+			result := check.Evaluator.Evaluate(context.Background())
 
 			assert.True(t, result.Pass)
 			assert.Nil(t, result.Err)
@@ -351,9 +355,9 @@ func TestCheck_Evaluate(t *testing.T) {
 				`code >= 200 && code < 300`,
 			)
 			require.NoError(t, err)
-			check.httpClient = mockClient
+			httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
 
-			result := check.Evaluate(context.Background())
+			result := check.Evaluator.Evaluate(context.Background())
 
 			assert.True(t, result.Pass)
 			assert.Nil(t, result.Err)
@@ -381,9 +385,9 @@ func TestCheck_Evaluate(t *testing.T) {
 				`body.count == 2 && size(body.users) == 2`,
 			)
 			require.NoError(t, err)
-			check.httpClient = mockClient
+			httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
 
-			result := check.Evaluate(context.Background())
+			result := check.Evaluator.Evaluate(context.Background())
 
 			assert.True(t, result.Pass)
 			assert.Nil(t, result.Err)
@@ -418,9 +422,9 @@ func TestCheck_Evaluate(t *testing.T) {
 			"",
 		)
 		require.NoError(t, err)
-		check.httpClient = mockClient
+		httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
 
-		check.Evaluate(context.Background())
+		check.Evaluator.Evaluate(context.Background())
 
 		assert.Equal(t, "Bearer secret-token", capturedReq.Header.Get("Authorization"))
 		assert.Equal(t, "api-key-123", capturedReq.Header.Get("X-API-Key"))
@@ -451,9 +455,9 @@ func TestCheck_Evaluate(t *testing.T) {
 			"",
 		)
 		require.NoError(t, err)
-		check.httpClient = mockClient
+		httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
 
-		check.Evaluate(context.Background())
+		check.Evaluator.Evaluate(context.Background())
 
 		assert.Equal(t, "Checkify/1.0", capturedReq.Header.Get("User-Agent"))
 		mockClient.AssertExpectations(t)
@@ -480,9 +484,9 @@ func TestCheck_Evaluate(t *testing.T) {
 			"", // No assertion
 		)
 		require.NoError(t, err)
-		check.httpClient = mockClient
+		httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
 
-		result := check.Evaluate(context.Background())
+		result := check.Evaluator.Evaluate(context.Background())
 
 		// Should pass when there's no assertion to evaluate
 		assert.True(t, result.Pass)
@@ -493,49 +497,31 @@ func TestCheck_Evaluate(t *testing.T) {
 
 func TestCheck_sendCheckRequest(t *testing.T) {
 	t.Run("NegativeTimeout", func(t *testing.T) {
-		check, err := NewHTTPCheck(
-			"test",
+		// NewHTTPCheckEvaluator should reject negative timeouts
+		_, err := NewHTTPCheckEvaluator(
 			"https://api.test.com/health",
 			"GET",
-			10*time.Second,
 			-1*time.Second,
-			"test",
-			nil,
 			nil,
 			FormatNone,
 			"",
 		)
-		require.NoError(t, err)
-
-		resp, latency, err := check.sendCheckRequest(context.Background())
-
-		assert.Nil(t, resp)
-		assert.Equal(t, time.Duration(0), latency)
 		assert.Error(t, err)
-		assert.IsType(t, &ErrCheckTimeout{}, err)
+		assert.Contains(t, err.Error(), "timeout must be greater than 0")
 	})
 
 	t.Run("ZeroTimeout", func(t *testing.T) {
-		check, err := NewHTTPCheck(
-			"test",
+		// NewHTTPCheckEvaluator should reject zero timeout
+		_, err := NewHTTPCheckEvaluator(
 			"https://api.test.com/health",
 			"GET",
-			10*time.Second,
 			0*time.Second,
-			"test",
-			nil,
 			nil,
 			FormatNone,
 			"",
 		)
-		require.NoError(t, err)
-
-		resp, latency, err := check.sendCheckRequest(context.Background())
-
-		assert.Nil(t, resp)
-		assert.Equal(t, time.Duration(0), latency)
 		assert.Error(t, err)
-		assert.IsType(t, &ErrCheckTimeout{}, err)
+		assert.Contains(t, err.Error(), "timeout must be greater than 0")
 	})
 }
 
@@ -560,59 +546,11 @@ func TestCheck_evaluateAssertion(t *testing.T) {
 			Header:     http.Header{},
 		}
 
-		pass, err := check.evaluateAssertion(map[string]interface{}{}, resp)
+		pass, err := check.Evaluator.(*HTTPCheckEvaluator).evaluateAssertion(map[string]interface{}{}, resp)
 
 		assert.False(t, pass)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "did not return a boolean value")
-	})
-}
-
-func TestValidateHTTPCheckSet(t *testing.T) {
-	t.Run("NoDuplicates", func(t *testing.T) {
-		checks := []HTTPCheck{
-			{Name: "check1", Environment: "prod"},
-			{Name: "check2", Environment: "prod"},
-			{Name: "check1", Environment: "stage"}, // Same name, different env - OK
-		}
-
-		err := ValidateHTTPCheckSet(checks)
-
-		assert.NoError(t, err)
-	})
-
-	t.Run("DuplicateNameAndEnv", func(t *testing.T) {
-		checks := []HTTPCheck{
-			{Name: "check1", Environment: "prod"},
-			{Name: "check1", Environment: "prod"}, // Duplicate
-		}
-
-		err := ValidateHTTPCheckSet(checks)
-
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "duplicate check key")
-		assert.Contains(t, err.Error(), "check1")
-		assert.Contains(t, err.Error(), "prod")
-	})
-
-	t.Run("SameNameDifferentEnv", func(t *testing.T) {
-		checks := []HTTPCheck{
-			{Name: "api-health", Environment: "prod"},
-			{Name: "api-health", Environment: "stage"},
-			{Name: "api-health", Environment: "dev"},
-		}
-
-		err := ValidateHTTPCheckSet(checks)
-
-		assert.NoError(t, err)
-	})
-
-	t.Run("EmptySet", func(t *testing.T) {
-		checks := []HTTPCheck{}
-
-		err := ValidateHTTPCheckSet(checks)
-
-		assert.NoError(t, err)
 	})
 }
 

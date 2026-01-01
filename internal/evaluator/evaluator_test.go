@@ -11,81 +11,68 @@ import (
 
 func TestNewEvaluator(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
-		httpChecks := []HTTPCheck{
-			{Name: "check1", Environment: "prod"},
-			{Name: "check2", Environment: "prod"},
-		}
-		pingChecks := []PingCheck{
-			{Name: "ping1", Environment: "prod"},
+		checks := []Check{
+			{Name: "check1", Environment: "prod", Interval: time.Second},
+			{Name: "check2", Environment: "prod", Interval: time.Second},
+			{Name: "ping1", Environment: "prod", Interval: time.Second},
 		}
 
-		evaluator, err := NewEvaluator(httpChecks, pingChecks, RealClock{})
+		evaluator, err := NewEvaluator(checks, RealClock{})
 
 		require.NoError(t, err)
 		assert.NotNil(t, evaluator)
-		assert.Len(t, evaluator.httpChecks, 2)
-		assert.Len(t, evaluator.pingChecks, 1)
+		assert.Len(t, evaluator.checks, 3)
 	})
 
-	t.Run("ValidatesHTTPCheckSet", func(t *testing.T) {
-		httpChecks := []HTTPCheck{
-			{Name: "duplicate", Environment: "prod"},
-			{Name: "duplicate", Environment: "prod"}, // Duplicate
+	t.Run("ValidatesCheckSet", func(t *testing.T) {
+		checks := []Check{
+			{Name: "duplicate", Environment: "prod", Interval: time.Second},
+			{Name: "duplicate", Environment: "prod", Interval: time.Second}, // Duplicate
 		}
 
-		_, err := NewEvaluator(httpChecks, []PingCheck{}, RealClock{})
+		_, err := NewEvaluator(checks, RealClock{})
 
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "validate HTTP check set")
-	})
-
-	t.Run("ValidatesPingCheckSet", func(t *testing.T) {
-		pingChecks := []PingCheck{
-			{Name: "duplicate", Environment: "prod"},
-			{Name: "duplicate", Environment: "prod"}, // Duplicate
-		}
-
-		_, err := NewEvaluator([]HTTPCheck{}, pingChecks, RealClock{})
-
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "validate Ping check set")
+		assert.Contains(t, err.Error(), "validate check set")
 	})
 
 	t.Run("DuplicateCheckError", func(t *testing.T) {
-		httpChecks := []HTTPCheck{
-			{Name: "api-check", Environment: "prod"},
-			{Name: "api-check", Environment: "prod"}, // Exact duplicate
+		checks := []Check{
+			{Name: "api-check", Environment: "prod", Interval: time.Second},
+			{Name: "api-check", Environment: "prod", Interval: time.Second}, // Exact duplicate
 		}
 
-		_, err := NewEvaluator(httpChecks, []PingCheck{}, RealClock{})
+		_, err := NewEvaluator(checks, RealClock{})
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "duplicate check key")
 	})
 
 	t.Run("EmptyCheckSet", func(t *testing.T) {
-		httpChecks := []HTTPCheck{}
-		pingChecks := []PingCheck{}
+		checks := []Check{}
 
-		evaluator, err := NewEvaluator(httpChecks, pingChecks, RealClock{})
+		evaluator, err := NewEvaluator(checks, RealClock{})
 
 		require.NoError(t, err)
 		assert.NotNil(t, evaluator)
-		assert.Len(t, evaluator.httpChecks, 0)
-		assert.Len(t, evaluator.pingChecks, 0)
+		assert.Len(t, evaluator.checks, 0)
 	})
 }
 
 func TestEvaluator_EvaluateChecksByName(t *testing.T) {
 	t.Run("SingleHTTPCheck", func(t *testing.T) {
 		// Create a simple check with no HTTP client (won't actually execute)
-		check := HTTPCheck{
+		httpEval := &HTTPCheckEvaluator{
+			Timeout: -1 * time.Second, // Negative timeout = immediate error
+		}
+		check := Check{
 			Name:        "test-check",
 			Environment: "test",
-			Timeout:     -1 * time.Second, // Negative timeout = immediate error
+			Interval:    time.Second,
+			Evaluator:   httpEval,
 		}
 
-		evaluator, err := NewEvaluator([]HTTPCheck{check}, []PingCheck{}, RealClock{})
+		evaluator, err := NewEvaluator([]Check{check}, RealClock{})
 		require.NoError(t, err)
 
 		// This should not panic, it will just execute the check
@@ -95,13 +82,17 @@ func TestEvaluator_EvaluateChecksByName(t *testing.T) {
 	})
 
 	t.Run("SinglePingCheck", func(t *testing.T) {
-		check := PingCheck{
+		pingEval := &PingCheckEvaluator{
+			Timeout: -1 * time.Second, // Negative timeout = immediate error
+		}
+		check := Check{
 			Name:        "test-ping",
 			Environment: "test",
-			Timeout:     -1 * time.Second, // Negative timeout = immediate error
+			Interval:    time.Second,
+			Evaluator:   pingEval,
 		}
 
-		evaluator, err := NewEvaluator([]HTTPCheck{}, []PingCheck{check}, RealClock{})
+		evaluator, err := NewEvaluator([]Check{check}, RealClock{})
 		require.NoError(t, err)
 
 		// This should not panic, it will just execute the check
@@ -111,30 +102,28 @@ func TestEvaluator_EvaluateChecksByName(t *testing.T) {
 	})
 
 	t.Run("MultipleChecks", func(t *testing.T) {
-		httpChecks := []HTTPCheck{
-			{Name: "check1", Environment: "prod", Timeout: -1 * time.Second},
-			{Name: "check1", Environment: "stage", Timeout: -1 * time.Second},
-			{Name: "check2", Environment: "prod", Timeout: -1 * time.Second},
-		}
-		pingChecks := []PingCheck{
-			{Name: "check1", Environment: "prod", Timeout: -1 * time.Second},
+		checks := []Check{
+			{Name: "check1", Environment: "prod", Interval: time.Second, Evaluator: &HTTPCheckEvaluator{Timeout: -1 * time.Second}},
+			{Name: "check1", Environment: "stage", Interval: time.Second, Evaluator: &HTTPCheckEvaluator{Timeout: -1 * time.Second}},
+			{Name: "check2", Environment: "prod", Interval: time.Second, Evaluator: &HTTPCheckEvaluator{Timeout: -1 * time.Second}},
+			{Name: "check1", Environment: "test", Interval: time.Second, Evaluator: &PingCheckEvaluator{Timeout: -1 * time.Second}},
 		}
 
-		evaluator, err := NewEvaluator(httpChecks, pingChecks, RealClock{})
+		evaluator, err := NewEvaluator(checks, RealClock{})
 		require.NoError(t, err)
 
-		// Should evaluate all checks with name "check1" (both HTTP and Ping)
+		// Should evaluate all checks with name "check1" (HTTP in prod, HTTP in stage, Ping in test)
 		evaluator.EvaluateChecksByName(context.Background(), "check1")
 
 		// Test completes successfully if no panic
 	})
 
 	t.Run("CheckNotFound", func(t *testing.T) {
-		httpChecks := []HTTPCheck{
-			{Name: "existing-check", Environment: "prod", Timeout: -1 * time.Second},
+		checks := []Check{
+			{Name: "existing-check", Environment: "prod", Interval: time.Second, Evaluator: &HTTPCheckEvaluator{Timeout: -1 * time.Second}},
 		}
 
-		evaluator, err := NewEvaluator(httpChecks, []PingCheck{}, RealClock{})
+		evaluator, err := NewEvaluator(checks, RealClock{})
 		require.NoError(t, err)
 
 		// Should not panic even if check doesn't exist
