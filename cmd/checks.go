@@ -86,7 +86,7 @@ func convertPingChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.
 				c.Assertion,
 			)
 			if err != nil {
-				return nil, fmt.Errorf("create Ping check %s for environment %s: %w", c.Name, envName, err)
+				return nil, fmt.Errorf("create ping check %s for environment %s: %w", c.Name, envName, err)
 			}
 
 			checks = append(checks, check)
