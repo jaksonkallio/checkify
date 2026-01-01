@@ -18,7 +18,10 @@ func convertHTTPChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.
 	var checks []evaluator.Check
 	for _, c := range cfg.Checks.HTTP {
 		for _, envName := range c.Environments {
-			environmentVarsInterpolator := varInterpolators[envName]
+			environmentVarsInterpolator, ok := varInterpolators[envName]
+			if !ok {
+				return nil, fmt.Errorf("no interpolator found for environment %q", envName)
+			}
 
 			interpolatorSet := config.NewInterpolatorSet(envInterpolator, environmentVarsInterpolator)
 
@@ -73,7 +76,10 @@ func convertPingChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.
 	var checks []evaluator.Check
 	for _, c := range cfg.Checks.Ping {
 		for _, envName := range c.Environments {
-			environmentVarsInterpolator := varInterpolators[envName]
+			environmentVarsInterpolator, ok := varInterpolators[envName]
+			if !ok {
+				return nil, fmt.Errorf("no interpolator found for environment %q", envName)
+			}
 
 			interpolatorSet := config.NewInterpolatorSet(envInterpolator, environmentVarsInterpolator)
 
