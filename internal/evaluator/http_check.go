@@ -109,7 +109,7 @@ func NewHTTPCheck(name string, endpoint string, method string, interval time.Dur
 		return Check{}, fmt.Errorf("create HTTP check evaluator: %w", err)
 	}
 
-	return NewCheck(name, environment, interval, tags, evaluator), nil
+	return NewCheck(name, environment, interval, tags, evaluator)
 }
 
 // Evaluate will perform the check and evaluate its assertion, returning an non-pass if the request or assertion failed.

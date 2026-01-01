@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/messari/checkify/internal/config"
@@ -34,10 +35,17 @@ func convertHTTPChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.
 				return nil, fmt.Errorf("endpoint contains uninterpolated placeholder")
 			}
 
+			var method string
+			if len(c.Method) == 0 {
+				method = http.MethodGet
+			} else {
+				method = c.Method
+			}
+
 			check, err := evaluator.NewHTTPCheck(
 				c.Name,
 				endpoint,
-				c.Method,
+				method,
 				c.Interval,
 				c.Timeout,
 				envName,
@@ -74,6 +82,17 @@ func convertPingChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.
 				return nil, fmt.Errorf("host contains uninterpolated placeholder")
 			}
 
+			if c.Count == 0 {
+				c.Count = 1
+			}
+
+			var ipStack evaluator.IPStack
+			if len(c.IPStack) == 0 {
+				ipStack = evaluator.IPStackDefault
+			} else {
+				ipStack = evaluator.IPStack(strings.ToLower(c.IPStack))
+			}
+
 			check, err := evaluator.NewPingCheck(
 				c.Name,
 				host,
@@ -82,7 +101,7 @@ func convertPingChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.
 				c.Timeout,
 				envName,
 				c.Tags,
-				evaluator.IPStack(strings.ToLower(c.IPStack)),
+				ipStack,
 				c.Assertion,
 			)
 			if err != nil {

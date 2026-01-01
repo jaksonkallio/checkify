@@ -171,7 +171,7 @@ func NewPingCheck(name string, host string, interval time.Duration, count int, t
 		return Check{}, fmt.Errorf("create ping check evaluator: %w", err)
 	}
 
-	return NewCheck(name, environment, interval, tags, evaluator), nil
+	return NewCheck(name, environment, interval, tags, evaluator)
 }
 
 // Evaluate performs an ICMP ping to the configured host and returns the result.

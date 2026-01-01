@@ -11,6 +11,14 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const (
+	MaxCheckInterval     = 7 * 24 * time.Hour
+	MaxNameLength        = 50
+	MaxEnvironmentLength = 20
+	MaxTags              = 10
+	MaxTagLength         = 20
+)
+
 // CheckEvaluator interface defines the evaluation behavior specific to each check type
 type CheckEvaluator interface {
 	Evaluate(ctx context.Context) CheckResult
@@ -31,14 +39,38 @@ func NewCheck(
 	interval time.Duration,
 	tags []string,
 	evaluator CheckEvaluator,
-) Check {
+) (Check, error) {
+	if len(name) == 0 {
+		return Check{}, fmt.Errorf("check name cannot be empty")
+	}
+
+	if len(name) > MaxNameLength {
+		return Check{}, fmt.Errorf("check name cannot exceed %d characters", MaxNameLength)
+	}
+
+	if len(environment) == 0 {
+		return Check{}, fmt.Errorf("check environment cannot be empty")
+	}
+
+	if len(environment) > MaxEnvironmentLength {
+		return Check{}, fmt.Errorf("check environment cannot exceed %d characters", MaxEnvironmentLength)
+	}
+
+	if interval < 0 || interval > MaxCheckInterval {
+		return Check{}, fmt.Errorf("check interval must be non-negative and no larger than %s", MaxCheckInterval)
+	}
+
+	if len(tags) > MaxTags {
+		return Check{}, fmt.Errorf("check cannot have more than %d tags", MaxTags)
+	}
+
 	return Check{
 		Name:        name,
 		Environment: environment,
 		Interval:    interval,
 		Tags:        tags,
 		Evaluator:   evaluator,
-	}
+	}, nil
 }
 
 type Evaluator struct {
