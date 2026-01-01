@@ -61,7 +61,7 @@ checks:
 		assert.Equal(t, "/metrics", cfg.Prometheus.Path)
 		assert.Len(t, cfg.Environments, 1)
 		assert.Equal(t, "test", cfg.Environments[0].Name)
-		assert.Len(t, cfg.Checks.HTTP,1)
+		assert.Len(t, cfg.Checks.HTTP, 1)
 		assert.Equal(t, "health-check", cfg.Checks.HTTP[0].Name)
 		assert.Equal(t, "GET", cfg.Checks.HTTP[0].Method)
 		assert.Equal(t, 30*time.Second, cfg.Checks.HTTP[0].Interval)
@@ -148,7 +148,7 @@ checks:
 		cfg, err := LoadWithReader("config.yaml", reader)
 
 		require.NoError(t, err)
-		assert.Len(t, cfg.Checks.HTTP,1)
+		assert.Len(t, cfg.Checks.HTTP, 1)
 		assert.Len(t, cfg.Checks.HTTP[0].Headers, 2)
 		assert.Equal(t, InterpolatedString("Bearer token"), cfg.Checks.HTTP[0].Headers["Authorization"])
 		assert.Equal(t, InterpolatedString("application/json"), cfg.Checks.HTTP[0].Headers["Content-Type"])
@@ -177,7 +177,7 @@ checks:
 		cfg, err := LoadWithReader("config.yaml", reader)
 
 		require.NoError(t, err)
-		assert.Len(t, cfg.Checks.HTTP,1)
+		assert.Len(t, cfg.Checks.HTTP, 1)
 		assert.Equal(t, []string{"critical", "api", "health"}, cfg.Checks.HTTP[0].Tags)
 	})
 
@@ -260,7 +260,7 @@ checks:
 
 		require.NoError(t, err)
 		assert.Len(t, cfg.Environments, 0)
-		assert.Len(t, cfg.Checks.HTTP,0)
+		assert.Len(t, cfg.Checks.HTTP, 0)
 	})
 }
 

@@ -142,7 +142,8 @@ func TestCheck_Evaluate(t *testing.T) {
 				`code == 200 && body == "pong"`,
 			)
 			require.NoError(t, err)
-			httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
+			httpEval := check.Evaluator.(*HTTPCheckEvaluator)
+			httpEval.httpClient = mockClient
 
 			result := check.Evaluator.Evaluate(context.Background())
 
@@ -172,7 +173,8 @@ func TestCheck_Evaluate(t *testing.T) {
 				`code == 200`,
 			)
 			require.NoError(t, err)
-			httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
+			httpEval := check.Evaluator.(*HTTPCheckEvaluator)
+			httpEval.httpClient = mockClient
 
 			result := check.Evaluator.Evaluate(context.Background())
 
@@ -202,7 +204,8 @@ func TestCheck_Evaluate(t *testing.T) {
 				`code == 204`,
 			)
 			require.NoError(t, err)
-			httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
+			httpEval := check.Evaluator.(*HTTPCheckEvaluator)
+			httpEval.httpClient = mockClient
 
 			result := check.Evaluator.Evaluate(context.Background())
 
@@ -233,7 +236,8 @@ func TestCheck_Evaluate(t *testing.T) {
 			`code == 200`,
 		)
 		require.NoError(t, err)
-		httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
+		httpEval := check.Evaluator.(*HTTPCheckEvaluator)
+		httpEval.httpClient = mockClient
 
 		result := check.Evaluator.Evaluate(context.Background())
 
@@ -259,7 +263,8 @@ func TestCheck_Evaluate(t *testing.T) {
 			`code == 200`,
 		)
 		require.NoError(t, err)
-		httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
+		httpEval := check.Evaluator.(*HTTPCheckEvaluator)
+		httpEval.httpClient = mockClient
 
 		result := check.Evaluator.Evaluate(context.Background())
 
@@ -290,7 +295,8 @@ func TestCheck_Evaluate(t *testing.T) {
 			`code == 200`,
 		)
 		require.NoError(t, err)
-		httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
+		httpEval := check.Evaluator.(*HTTPCheckEvaluator)
+		httpEval.httpClient = mockClient
 
 		result := check.Evaluator.Evaluate(context.Background())
 
@@ -325,7 +331,8 @@ func TestCheck_Evaluate(t *testing.T) {
 				`code == 200 && headers["Content-Type"] == "application/json" && headers["X-Custom"] == "test-value"`,
 			)
 			require.NoError(t, err)
-			httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
+			httpEval := check.Evaluator.(*HTTPCheckEvaluator)
+			httpEval.httpClient = mockClient
 
 			result := check.Evaluator.Evaluate(context.Background())
 
@@ -355,7 +362,8 @@ func TestCheck_Evaluate(t *testing.T) {
 				`code >= 200 && code < 300`,
 			)
 			require.NoError(t, err)
-			httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
+			httpEval := check.Evaluator.(*HTTPCheckEvaluator)
+			httpEval.httpClient = mockClient
 
 			result := check.Evaluator.Evaluate(context.Background())
 
@@ -385,7 +393,8 @@ func TestCheck_Evaluate(t *testing.T) {
 				`body.count == 2 && size(body.users) == 2`,
 			)
 			require.NoError(t, err)
-			httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
+			httpEval := check.Evaluator.(*HTTPCheckEvaluator)
+			httpEval.httpClient = mockClient
 
 			result := check.Evaluator.Evaluate(context.Background())
 
@@ -422,7 +431,8 @@ func TestCheck_Evaluate(t *testing.T) {
 			"",
 		)
 		require.NoError(t, err)
-		httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
+		httpEval := check.Evaluator.(*HTTPCheckEvaluator)
+		httpEval.httpClient = mockClient
 
 		check.Evaluator.Evaluate(context.Background())
 
@@ -455,7 +465,8 @@ func TestCheck_Evaluate(t *testing.T) {
 			"",
 		)
 		require.NoError(t, err)
-		httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
+		httpEval := check.Evaluator.(*HTTPCheckEvaluator)
+		httpEval.httpClient = mockClient
 
 		check.Evaluator.Evaluate(context.Background())
 
@@ -484,7 +495,8 @@ func TestCheck_Evaluate(t *testing.T) {
 			"", // No assertion
 		)
 		require.NoError(t, err)
-		httpEval := check.Evaluator.(*HTTPCheckEvaluator); httpEval.httpClient = mockClient
+		httpEval := check.Evaluator.(*HTTPCheckEvaluator)
+		httpEval.httpClient = mockClient
 
 		result := check.Evaluator.Evaluate(context.Background())
 

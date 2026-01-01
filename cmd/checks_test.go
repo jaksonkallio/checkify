@@ -70,14 +70,14 @@ func TestConvertHTTPChecks(t *testing.T) {
 			},
 			Checks: config.Checks{
 				HTTP: []config.HTTPCheck{
-				{
-					Name:         "api-check",
-					Environments: []string{"prod"},
-					Endpoint:     config.InterpolatedString("${var.api_url}/status"),
-					Method:       "GET",
-					Interval:     30 * time.Second,
-					Timeout:      5 * time.Second,
-				},
+					{
+						Name:         "api-check",
+						Environments: []string{"prod"},
+						Endpoint:     config.InterpolatedString("${var.api_url}/status"),
+						Method:       "GET",
+						Interval:     30 * time.Second,
+						Timeout:      5 * time.Second,
+					},
 				},
 			},
 		}
@@ -85,7 +85,7 @@ func TestConvertHTTPChecks(t *testing.T) {
 		httpChecks, err := convertHTTPChecks(cfg, envProvider)
 
 		require.NoError(t, err)
-		require.Len(t, httpChecks,1)
+		require.Len(t, httpChecks, 1)
 		assert.Equal(t, "https://api.example.com/status", httpChecks[0].Evaluator.(*evaluator.HTTPCheckEvaluator).Endpoint)
 	})
 
@@ -106,14 +106,14 @@ func TestConvertHTTPChecks(t *testing.T) {
 			},
 			Checks: config.Checks{
 				HTTP: []config.HTTPCheck{
-				{
-					Name:         "versioned-endpoint",
-					Environments: []string{"test"},
-					Endpoint:     config.InterpolatedString("${var.base_url}/${var.version}/users"),
-					Method:       "GET",
-					Interval:     30 * time.Second,
-					Timeout:      5 * time.Second,
-				},
+					{
+						Name:         "versioned-endpoint",
+						Environments: []string{"test"},
+						Endpoint:     config.InterpolatedString("${var.base_url}/${var.version}/users"),
+						Method:       "GET",
+						Interval:     30 * time.Second,
+						Timeout:      5 * time.Second,
+					},
 				},
 			},
 		}
@@ -121,7 +121,7 @@ func TestConvertHTTPChecks(t *testing.T) {
 		httpChecks, err := convertHTTPChecks(cfg, envProvider)
 
 		require.NoError(t, err)
-		require.Len(t, httpChecks,1)
+		require.Len(t, httpChecks, 1)
 		assert.Equal(t, "https://api.test.com/v1/users", httpChecks[0].Evaluator.(*evaluator.HTTPCheckEvaluator).Endpoint)
 	})
 
@@ -145,17 +145,17 @@ func TestConvertHTTPChecks(t *testing.T) {
 			},
 			Checks: config.Checks{
 				HTTP: []config.HTTPCheck{
-				{
-					Name:         "api-check",
-					Environments: []string{"prod"},
-					Endpoint:     config.InterpolatedString("${var.api_url}/v1/status"),
-					Method:       "GET",
-					Headers: map[string]config.InterpolatedString{
-						"Authorization": config.InterpolatedString("Bearer ${var.token}"),
+					{
+						Name:         "api-check",
+						Environments: []string{"prod"},
+						Endpoint:     config.InterpolatedString("${var.api_url}/v1/status"),
+						Method:       "GET",
+						Headers: map[string]config.InterpolatedString{
+							"Authorization": config.InterpolatedString("Bearer ${var.token}"),
+						},
+						Interval: 30 * time.Second,
+						Timeout:  5 * time.Second,
 					},
-					Interval: 30 * time.Second,
-					Timeout:  5 * time.Second,
-				},
 				},
 			},
 		}
@@ -163,7 +163,7 @@ func TestConvertHTTPChecks(t *testing.T) {
 		httpChecks, err := convertHTTPChecks(cfg, envProvider)
 
 		require.NoError(t, err)
-		require.Len(t, httpChecks,1)
+		require.Len(t, httpChecks, 1)
 		assert.Equal(t, "https://api.example.com/v1/status", httpChecks[0].Evaluator.(*evaluator.HTTPCheckEvaluator).Endpoint)
 		assert.Equal(t, "Bearer prod_secret_token", httpChecks[0].Evaluator.(*evaluator.HTTPCheckEvaluator).Headers["Authorization"])
 	})
@@ -190,14 +190,14 @@ func TestConvertHTTPChecks(t *testing.T) {
 			},
 			Checks: config.Checks{
 				HTTP: []config.HTTPCheck{
-				{
-					Name:         "health-check",
-					Environments: []string{"prod", "stage"}, // Should create 2 checks
-					Endpoint:     config.InterpolatedString("${var.api_url}/health"),
-					Method:       "GET",
-					Interval:     30 * time.Second,
-					Timeout:      5 * time.Second,
-				},
+					{
+						Name:         "health-check",
+						Environments: []string{"prod", "stage"}, // Should create 2 checks
+						Endpoint:     config.InterpolatedString("${var.api_url}/health"),
+						Method:       "GET",
+						Interval:     30 * time.Second,
+						Timeout:      5 * time.Second,
+					},
 				},
 			},
 		}
@@ -205,7 +205,7 @@ func TestConvertHTTPChecks(t *testing.T) {
 		httpChecks, err := convertHTTPChecks(cfg, envProvider)
 
 		require.NoError(t, err)
-		require.Len(t, httpChecks,2)
+		require.Len(t, httpChecks, 2)
 
 		// Check prod environment
 		assert.Equal(t, "health-check", httpChecks[0].Name)
@@ -236,18 +236,18 @@ func TestConvertHTTPChecks(t *testing.T) {
 			},
 			Checks: config.Checks{
 				HTTP: []config.HTTPCheck{
-				{
-					Name:         "secured-endpoint",
-					Environments: []string{"test"},
-					Endpoint:     config.InterpolatedString("https://api.test.com/secure"),
-					Method:       "GET",
-					Headers: map[string]config.InterpolatedString{
-						"X-API-Key":    config.InterpolatedString("${var.token}"),
-						"Content-Type": config.InterpolatedString("application/json"),
+					{
+						Name:         "secured-endpoint",
+						Environments: []string{"test"},
+						Endpoint:     config.InterpolatedString("https://api.test.com/secure"),
+						Method:       "GET",
+						Headers: map[string]config.InterpolatedString{
+							"X-API-Key":    config.InterpolatedString("${var.token}"),
+							"Content-Type": config.InterpolatedString("application/json"),
+						},
+						Interval: 30 * time.Second,
+						Timeout:  5 * time.Second,
 					},
-					Interval: 30 * time.Second,
-					Timeout:  5 * time.Second,
-				},
 				},
 			},
 		}
@@ -255,7 +255,7 @@ func TestConvertHTTPChecks(t *testing.T) {
 		httpChecks, err := convertHTTPChecks(cfg, envProvider)
 
 		require.NoError(t, err)
-		require.Len(t, httpChecks,1)
+		require.Len(t, httpChecks, 1)
 		assert.Equal(t, "secret-key-123", httpChecks[0].Evaluator.(*evaluator.HTTPCheckEvaluator).Headers["X-API-Key"])
 		assert.Equal(t, "application/json", httpChecks[0].Evaluator.(*evaluator.HTTPCheckEvaluator).Headers["Content-Type"])
 	})
@@ -387,15 +387,15 @@ func TestConvertHTTPChecks(t *testing.T) {
 			},
 			Checks: config.Checks{
 				HTTP: []config.HTTPCheck{
-				{
-					Name:         "tagged-check",
-					Environments: []string{"test"},
-					Endpoint:     config.InterpolatedString("${var.api_url}/health"),
-					Method:       "GET",
-					Interval:     30 * time.Second,
-					Timeout:      5 * time.Second,
-					Tags:         []string{"critical", "api", "health"},
-				},
+					{
+						Name:         "tagged-check",
+						Environments: []string{"test"},
+						Endpoint:     config.InterpolatedString("${var.api_url}/health"),
+						Method:       "GET",
+						Interval:     30 * time.Second,
+						Timeout:      5 * time.Second,
+						Tags:         []string{"critical", "api", "health"},
+					},
 				},
 			},
 		}
@@ -403,7 +403,7 @@ func TestConvertHTTPChecks(t *testing.T) {
 		httpChecks, err := convertHTTPChecks(cfg, envProvider)
 
 		require.NoError(t, err)
-		require.Len(t, httpChecks,1)
+		require.Len(t, httpChecks, 1)
 		assert.Equal(t, []string{"critical", "api", "health"}, httpChecks[0].Tags)
 	})
 
@@ -423,15 +423,15 @@ func TestConvertHTTPChecks(t *testing.T) {
 			},
 			Checks: config.Checks{
 				HTTP: []config.HTTPCheck{
-				{
-					Name:         "check-with-assertion",
-					Environments: []string{"test"},
-					Endpoint:     config.InterpolatedString("${var.api_url}/health"),
-					Method:       "GET",
-					Interval:     30 * time.Second,
-					Timeout:      5 * time.Second,
-					Assertion:    `code == 200 && body.status == "healthy"`,
-				},
+					{
+						Name:         "check-with-assertion",
+						Environments: []string{"test"},
+						Endpoint:     config.InterpolatedString("${var.api_url}/health"),
+						Method:       "GET",
+						Interval:     30 * time.Second,
+						Timeout:      5 * time.Second,
+						Assertion:    `code == 200 && body.status == "healthy"`,
+					},
 				},
 			},
 		}
@@ -439,7 +439,7 @@ func TestConvertHTTPChecks(t *testing.T) {
 		httpChecks, err := convertHTTPChecks(cfg, envProvider)
 
 		require.NoError(t, err)
-		require.Len(t, httpChecks,1)
+		require.Len(t, httpChecks, 1)
 		// Assertion is an implementation detail, just verify the check was created successfully
 		assert.NotNil(t, httpChecks[0].Evaluator)
 	})
