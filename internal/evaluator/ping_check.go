@@ -54,6 +54,9 @@ func (p *DefaultPinger) Run(ctx context.Context) (PingStatistics, error) {
 
 	pinger.Count = p.Count
 	pinger.Timeout = p.Timeout
+	// Only support non-privileged pings.
+	// Despite being non-privileged, still requires `CAP_NET_RAW` capability on Linux.
+	// IDEA: Consider making this configurable if a user wants to run with elevated privileges.
 	pinger.SetPrivileged(false)
 
 	switch p.IPStack {
