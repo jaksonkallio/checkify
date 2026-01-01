@@ -15,8 +15,8 @@ const (
 	IPStackAny     IPStack = "any"
 	IPStackDefault IPStack = IPStackAny
 
-	MaxPingTimeout = 5 * time.Minute
-	MaxPingCount   = 1000
+	MaxPingTimeout = 1 * time.Minute
+	MaxPingCount   = 100
 )
 
 type IPStack string
