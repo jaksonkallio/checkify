@@ -65,7 +65,7 @@ func evaluatorCmd(ctx context.Context) error {
 
 	pingChecks, err := convertPingChecks(config, OSEnvProvider{})
 	if err != nil {
-		return fmt.Errorf("convert Ping checks: %w", err)
+		return fmt.Errorf("convert ping checks: %w", err)
 	}
 
 	// Combine all checks into a single slice
@@ -102,7 +102,7 @@ func evaluateOnceCmd(ctx context.Context) error {
 
 	pingChecks, err := convertPingChecks(config, OSEnvProvider{})
 	if err != nil {
-		return fmt.Errorf("convert Ping checks: %w", err)
+		return fmt.Errorf("convert ping checks: %w", err)
 	}
 
 	// Combine all checks into a single slice
@@ -131,7 +131,7 @@ func validateCmd(ctx context.Context) error {
 
 	pingChecks, err := convertPingChecks(config, OSEnvProvider{})
 	if err != nil {
-		return fmt.Errorf("convert Ping checks: %w", err)
+		return fmt.Errorf("convert ping checks: %w", err)
 	}
 
 	// Combine all checks into a single slice
