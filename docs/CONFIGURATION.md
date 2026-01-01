@@ -60,7 +60,7 @@ checks:
 
 Common to all check types are these configuration properties:
 
-`name` string should be in a format that you're comfortable working with in downstream monitoring platforms. I recommend standardizing around using kabob-case or snake_case.
+`name` string should be in a format that you're comfortable working with in downstream monitoring platforms. I recommend standardizing around using kebab-case or snake_case.
 
 `environments` string array must contain at least one environment name.
 
