@@ -11,6 +11,68 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const (
+	MaxCheckInterval     = 7 * 24 * time.Hour
+	MaxNameLength        = 50
+	MaxEnvironmentLength = 20
+	MaxTags              = 10
+	MaxTagLength         = 20
+)
+
+// CheckEvaluator interface defines the evaluation behavior specific to each check type
+type CheckEvaluator interface {
+	Evaluate(ctx context.Context) CheckResult
+}
+
+// Check contains common metadata and delegates evaluation to a CheckEvaluator
+type Check struct {
+	Name        string
+	Environment string
+	Interval    time.Duration
+	Tags        []string
+	Evaluator   CheckEvaluator
+}
+
+func NewCheck(
+	name string,
+	environment string,
+	interval time.Duration,
+	tags []string,
+	evaluator CheckEvaluator,
+) (Check, error) {
+	if len(name) == 0 {
+		return Check{}, fmt.Errorf("check name cannot be empty")
+	}
+
+	if len(name) > MaxNameLength {
+		return Check{}, fmt.Errorf("check name cannot exceed %d characters", MaxNameLength)
+	}
+
+	if len(environment) == 0 {
+		return Check{}, fmt.Errorf("check environment cannot be empty")
+	}
+
+	if len(environment) > MaxEnvironmentLength {
+		return Check{}, fmt.Errorf("check environment cannot exceed %d characters", MaxEnvironmentLength)
+	}
+
+	if interval < 0 || interval > MaxCheckInterval {
+		return Check{}, fmt.Errorf("check interval must be non-negative and no larger than %s", MaxCheckInterval)
+	}
+
+	if len(tags) > MaxTags {
+		return Check{}, fmt.Errorf("check cannot have more than %d tags", MaxTags)
+	}
+
+	return Check{
+		Name:        name,
+		Environment: environment,
+		Interval:    interval,
+		Tags:        tags,
+		Evaluator:   evaluator,
+	}, nil
+}
+
 type Evaluator struct {
 	checks []Check
 	clock  Clock
@@ -27,6 +89,26 @@ func NewEvaluator(checks []Check, clock Clock) (*Evaluator, error) {
 	}, nil
 }
 
+func ValidateCheckSet(checks []Check) error {
+	// Deduplicate checks by name and environment.
+	type checkKey struct {
+		Name        string
+		Environment string
+	}
+	checkNames := make(map[checkKey]struct{})
+	for _, check := range checks {
+		key := checkKey{
+			Name:        check.Name,
+			Environment: check.Environment,
+		}
+		if _, exists := checkNames[key]; exists {
+			return fmt.Errorf("duplicate check key with name %q in environment %q", check.Name, check.Environment)
+		}
+		checkNames[key] = struct{}{}
+	}
+	return nil
+}
+
 // Run will iteratively evaluate all checks based on their configured schedules until the context is cancelled.
 func (e *Evaluator) Run(ctx context.Context) {
 	for _, check := range e.checks {
@@ -41,18 +123,20 @@ func (e *Evaluator) Run(ctx context.Context) {
 func (e *Evaluator) checkEvaluateLoop(ctx context.Context, check Check) {
 	slog.Debug(
 		"starting check evaluation loop",
+		"evaluatorType", fmt.Sprintf("%T", check.Evaluator),
 		"check", check.Name,
 		"environment", check.Environment,
 		"interval", check.Interval,
 	)
 
-	if check.Interval <= time.Second {
+	interval := check.Interval
+	if interval <= time.Second {
 		// Keep the interval sane.
-		check.Interval = time.Second
+		interval = time.Second
 	}
 
 	// Initial phase jitter, up to check interval duration.
-	delay := e.clock.Jitter(check.Interval)
+	delay := e.clock.Jitter(interval)
 	timer := e.clock.NewTimer(delay)
 	defer timer.Stop()
 
@@ -63,7 +147,7 @@ func (e *Evaluator) checkEvaluateLoop(ctx context.Context, check Check) {
 		case <-timer.C:
 		}
 
-		result := check.Evaluate(ctx)
+		result := check.Evaluator.Evaluate(ctx)
 
 		captureCheckMetrics(check, result, e.clock.Now())
 
@@ -71,6 +155,7 @@ func (e *Evaluator) checkEvaluateLoop(ctx context.Context, check Check) {
 		// Do not treat check failures as actual errors, check failures exist at a higher-level.
 		slog.Info(
 			"evaluated check for scheduled run",
+			"evaluatorType", fmt.Sprintf("%T", check.Evaluator),
 			"name", check.Name,
 			"environment", check.Environment,
 			"tags", check.Tags,
@@ -79,7 +164,7 @@ func (e *Evaluator) checkEvaluateLoop(ctx context.Context, check Check) {
 			"error", result.Err,
 		)
 
-		timer.Reset(check.Interval)
+		timer.Reset(interval)
 	}
 }
 
@@ -88,9 +173,10 @@ func (e *Evaluator) checkEvaluateLoop(ctx context.Context, check Check) {
 func (e *Evaluator) EvaluateChecksByName(ctx context.Context, checkName string) {
 	for _, check := range e.checks {
 		if check.Name == checkName {
-			result := check.Evaluate(ctx)
+			result := check.Evaluator.Evaluate(ctx)
 			slog.Info(
 				"evaluated check for single run",
+				"evaluatorType", fmt.Sprintf("%T", check.Evaluator),
 				"name", check.Name,
 				"environment", check.Environment,
 				"tags", check.Tags,

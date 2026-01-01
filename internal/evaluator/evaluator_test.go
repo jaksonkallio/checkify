@@ -12,21 +12,22 @@ import (
 func TestNewEvaluator(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		checks := []Check{
-			{Name: "check1", Environment: "prod"},
-			{Name: "check2", Environment: "prod"},
+			{Name: "check1", Environment: "prod", Interval: time.Second},
+			{Name: "check2", Environment: "prod", Interval: time.Second},
+			{Name: "ping1", Environment: "prod", Interval: time.Second},
 		}
 
 		evaluator, err := NewEvaluator(checks, RealClock{})
 
 		require.NoError(t, err)
 		assert.NotNil(t, evaluator)
-		assert.Len(t, evaluator.checks, 2)
+		assert.Len(t, evaluator.checks, 3)
 	})
 
 	t.Run("ValidatesCheckSet", func(t *testing.T) {
 		checks := []Check{
-			{Name: "duplicate", Environment: "prod"},
-			{Name: "duplicate", Environment: "prod"}, // Duplicate
+			{Name: "duplicate", Environment: "prod", Interval: time.Second},
+			{Name: "duplicate", Environment: "prod", Interval: time.Second}, // Duplicate
 		}
 
 		_, err := NewEvaluator(checks, RealClock{})
@@ -37,8 +38,8 @@ func TestNewEvaluator(t *testing.T) {
 
 	t.Run("DuplicateCheckError", func(t *testing.T) {
 		checks := []Check{
-			{Name: "api-check", Environment: "prod"},
-			{Name: "api-check", Environment: "prod"}, // Exact duplicate
+			{Name: "api-check", Environment: "prod", Interval: time.Second},
+			{Name: "api-check", Environment: "prod", Interval: time.Second}, // Exact duplicate
 		}
 
 		_, err := NewEvaluator(checks, RealClock{})
@@ -59,12 +60,16 @@ func TestNewEvaluator(t *testing.T) {
 }
 
 func TestEvaluator_EvaluateChecksByName(t *testing.T) {
-	t.Run("SingleCheck", func(t *testing.T) {
+	t.Run("SingleHTTPCheck", func(t *testing.T) {
 		// Create a simple check with no HTTP client (won't actually execute)
+		httpEval := &HTTPCheckEvaluator{
+			Timeout: -1 * time.Second, // Negative timeout = immediate error
+		}
 		check := Check{
 			Name:        "test-check",
 			Environment: "test",
-			Timeout:     -1 * time.Second, // Negative timeout = immediate error
+			Interval:    time.Second,
+			Evaluator:   httpEval,
 		}
 
 		evaluator, err := NewEvaluator([]Check{check}, RealClock{})
@@ -76,17 +81,38 @@ func TestEvaluator_EvaluateChecksByName(t *testing.T) {
 		// Test completes successfully if no panic
 	})
 
+	t.Run("SinglePingCheck", func(t *testing.T) {
+		pingEval := &PingCheckEvaluator{
+			Timeout: -1 * time.Second, // Negative timeout = immediate error
+		}
+		check := Check{
+			Name:        "test-ping",
+			Environment: "test",
+			Interval:    time.Second,
+			Evaluator:   pingEval,
+		}
+
+		evaluator, err := NewEvaluator([]Check{check}, RealClock{})
+		require.NoError(t, err)
+
+		// This should not panic, it will just execute the check
+		evaluator.EvaluateChecksByName(context.Background(), "test-ping")
+
+		// Test completes successfully if no panic
+	})
+
 	t.Run("MultipleChecks", func(t *testing.T) {
 		checks := []Check{
-			{Name: "check1", Environment: "prod", Timeout: -1 * time.Second},
-			{Name: "check1", Environment: "stage", Timeout: -1 * time.Second},
-			{Name: "check2", Environment: "prod", Timeout: -1 * time.Second},
+			{Name: "check1", Environment: "prod", Interval: time.Second, Evaluator: &HTTPCheckEvaluator{Timeout: -1 * time.Second}},
+			{Name: "check1", Environment: "stage", Interval: time.Second, Evaluator: &HTTPCheckEvaluator{Timeout: -1 * time.Second}},
+			{Name: "check2", Environment: "prod", Interval: time.Second, Evaluator: &HTTPCheckEvaluator{Timeout: -1 * time.Second}},
+			{Name: "check1", Environment: "test", Interval: time.Second, Evaluator: &PingCheckEvaluator{Timeout: -1 * time.Second}},
 		}
 
 		evaluator, err := NewEvaluator(checks, RealClock{})
 		require.NoError(t, err)
 
-		// Should evaluate both checks with name "check1"
+		// Should evaluate all checks with name "check1" (HTTP in prod, HTTP in stage, Ping in test)
 		evaluator.EvaluateChecksByName(context.Background(), "check1")
 
 		// Test completes successfully if no panic
@@ -94,7 +120,7 @@ func TestEvaluator_EvaluateChecksByName(t *testing.T) {
 
 	t.Run("CheckNotFound", func(t *testing.T) {
 		checks := []Check{
-			{Name: "existing-check", Environment: "prod", Timeout: -1 * time.Second},
+			{Name: "existing-check", Environment: "prod", Interval: time.Second, Evaluator: &HTTPCheckEvaluator{Timeout: -1 * time.Second}},
 		}
 
 		evaluator, err := NewEvaluator(checks, RealClock{})

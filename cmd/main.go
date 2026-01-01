@@ -58,10 +58,18 @@ func evaluatorCmd(ctx context.Context) error {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	checks, err := convertChecks(config, OSEnvProvider{})
+	httpChecks, err := convertHTTPChecks(config, OSEnvProvider{})
 	if err != nil {
-		return fmt.Errorf("convert checks: %w", err)
+		return fmt.Errorf("convert HTTP checks: %w", err)
 	}
+
+	pingChecks, err := convertPingChecks(config, OSEnvProvider{})
+	if err != nil {
+		return fmt.Errorf("convert ping checks: %w", err)
+	}
+
+	// Combine all checks into a single slice
+	checks := append(httpChecks, pingChecks...)
 
 	if config.Prometheus.Enabled() {
 		// Serve prometheus metrics.
@@ -87,10 +95,18 @@ func evaluateOnceCmd(ctx context.Context) error {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	checks, err := convertChecks(config, OSEnvProvider{})
+	httpChecks, err := convertHTTPChecks(config, OSEnvProvider{})
 	if err != nil {
-		return fmt.Errorf("convert checks: %w", err)
+		return fmt.Errorf("convert HTTP checks: %w", err)
 	}
+
+	pingChecks, err := convertPingChecks(config, OSEnvProvider{})
+	if err != nil {
+		return fmt.Errorf("convert ping checks: %w", err)
+	}
+
+	// Combine all checks into a single slice
+	checks := append(httpChecks, pingChecks...)
 
 	// Note that when evaluating once, the Prometheus metrics server is not started as metrics should not be collected for one-off runes.
 
@@ -108,10 +124,18 @@ func validateCmd(ctx context.Context) error {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	checks, err := convertChecks(config, OSEnvProvider{})
+	httpChecks, err := convertHTTPChecks(config, OSEnvProvider{})
 	if err != nil {
-		return fmt.Errorf("convert checks: %w", err)
+		return fmt.Errorf("convert HTTP checks: %w", err)
 	}
+
+	pingChecks, err := convertPingChecks(config, OSEnvProvider{})
+	if err != nil {
+		return fmt.Errorf("convert ping checks: %w", err)
+	}
+
+	// Combine all checks into a single slice
+	checks := append(httpChecks, pingChecks...)
 
 	if err := evaluator.ValidateCheckSet(checks); err != nil {
 		return fmt.Errorf("validate check set: %w", err)

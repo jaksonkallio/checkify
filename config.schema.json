@@ -1,0 +1,235 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Checkify Configuration",
+  "description": "Configuration schema for Checkify monitoring tool",
+  "type": "object",
+  "properties": {
+    "prometheus": {
+      "type": "object",
+      "description": "Prometheus metrics server configuration",
+      "properties": {
+        "port": {
+          "type": "integer",
+          "description": "Port number for Prometheus metrics endpoint",
+          "minimum": 1,
+          "maximum": 65535,
+          "examples": [2112, 9090]
+        },
+        "path": {
+          "type": "string",
+          "description": "HTTP path for metrics endpoint",
+          "pattern": "^/",
+          "examples": ["/metrics"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "environments": {
+      "type": "array",
+      "description": "List of environments for running checks",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Environment name",
+            "examples": ["prod", "staging", "dev"]
+          },
+          "vars": {
+            "type": "object",
+            "description": "Environment-specific variables for interpolation",
+            "additionalProperties": {
+              "type": "string",
+              "description": "Variable value (supports ${env.VAR} interpolation)"
+            },
+            "examples": [
+              {
+                "api_url": "https://api.example.com",
+                "token": "${env.API_TOKEN}"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "checks": {
+      "type": "object",
+      "description": "Health checks configuration",
+      "properties": {
+        "http": {
+          "type": "array",
+          "description": "HTTP/HTTPS endpoint checks",
+          "items": {
+            "type": "object",
+            "required": ["name", "environments", "endpoint", "method", "interval", "timeout"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Unique check name",
+                "minLength": 1,
+                "examples": ["api-health-check", "website-status"]
+              },
+              "environments": {
+                "type": "array",
+                "description": "List of environments to run this check in",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "examples": [["prod", "staging"]]
+              },
+              "endpoint": {
+                "type": "string",
+                "description": "HTTP endpoint URL (supports ${var.NAME} and ${env.VAR} interpolation)",
+                "examples": [
+                  "https://api.example.com/health",
+                  "${var.api_url}/status"
+                ]
+              },
+              "method": {
+                "type": "string",
+                "description": "HTTP method",
+                "enum": ["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"],
+                "default": "GET"
+              },
+              "interval": {
+                "type": "string",
+                "description": "Check interval (e.g., 30s, 5m, 1h)",
+                "pattern": "^[0-9]+(ns|us|ms|s|m|h)$",
+                "examples": ["30s", "5m", "1h"]
+              },
+              "timeout": {
+                "type": "string",
+                "description": "Request timeout (e.g., 5s, 30s)",
+                "pattern": "^[0-9]+(ns|us|ms|s|m|h)$",
+                "examples": ["5s", "10s", "30s"]
+              },
+              "headers": {
+                "type": "object",
+                "description": "HTTP headers to include in request",
+                "additionalProperties": {
+                  "type": "string",
+                  "description": "Header value (supports interpolation)"
+                },
+                "examples": [
+                  {
+                    "Authorization": "Bearer ${var.token}",
+                    "Content-Type": "application/json"
+                  }
+                ]
+              },
+              "tags": {
+                "type": "array",
+                "description": "Tags for organizing and filtering checks",
+                "items": {
+                  "type": "string"
+                },
+                "examples": [["critical", "api", "external"]]
+              },
+              "response_format": {
+                "type": "string",
+                "description": "Expected response format for assertion evaluation",
+                "enum": ["json", "string", "binary", "none"],
+                "default": "none",
+                "examples": ["json"]
+              },
+              "assertion": {
+                "type": "string",
+                "description": "CEL expression to validate response (available variables: body, code, headers)",
+                "examples": [
+                  "code == 200",
+                  "code == 200 && body.status == 'healthy'",
+                  "code >= 200 && code < 300 && headers['Content-Type'].contains('json')"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "ping": {
+          "type": "array",
+          "description": "ICMP ping checks",
+          "items": {
+            "type": "object",
+            "required": ["name", "environments", "host", "interval", "timeout"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Unique check name",
+                "minLength": 1,
+                "examples": ["dns-server-ping", "gateway-ping"]
+              },
+              "environments": {
+                "type": "array",
+                "description": "List of environments to run this check in",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "examples": [["prod", "staging"]]
+              },
+              "host": {
+                "type": "string",
+                "description": "Host to ping - domain name, IPv4, or IPv6 (supports ${var.NAME} and ${env.VAR} interpolation)",
+                "minLength": 1,
+                "examples": [
+                  "8.8.8.8",
+                  "google.com",
+                  "2001:4860:4860::8888",
+                  "${var.gateway_ip}"
+                ]
+              },
+              "interval": {
+                "type": "string",
+                "description": "Check interval (e.g., 10s, 1m)",
+                "pattern": "^[0-9]+(ns|us|ms|s|m|h)$",
+                "examples": ["10s", "30s", "1m"]
+              },
+              "timeout": {
+                "type": "string",
+                "description": "Ping timeout (e.g., 2s, 5s)",
+                "pattern": "^[0-9]+(ns|us|ms|s|m|h)$",
+                "examples": ["2s", "5s"]
+              },
+              "count": {
+                "type": "integer",
+                "description": "Number of ping packets to send",
+                "minimum": 1,
+                "default": 1,
+                "examples": [1, 3, 5]
+              },
+              "ip_stack": {
+                "type": "string",
+                "description": "IP stack to use for pinging",
+                "enum": ["ipv4", "ipv6", "any"],
+                "default": "any",
+                "examples": ["ipv4", "ipv6", "any"]
+              },
+              "tags": {
+                "type": "array",
+                "description": "Tags for organizing and filtering checks",
+                "items": {
+                  "type": "string"
+                },
+                "examples": [["critical", "infrastructure", "network"]]
+              },
+              "assertion": {
+                "type": "string",
+                "description": "CEL expression to validate ping results (available variables: packet_loss_pct, avg_rtt_ms, min_rtt_ms, max_rtt_ms, packets_sent, packets_received, packets_received_dup)",
+                "examples": [
+                  "packet_loss_pct == 0.0",
+                  "packet_loss_pct < 10.0 && avg_rtt_ms < 100"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

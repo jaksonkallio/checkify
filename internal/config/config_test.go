@@ -42,13 +42,14 @@ environments:
       api_url: https://api.test.com
 
 checks:
-  - name: health-check
-    environments: [test]
-    endpoint: https://api.test.com/health
-    method: GET
-    interval: 30s
-    timeout: 5s
-    response_format: json
+  http:
+    - name: health-check
+      environments: [test]
+      endpoint: https://api.test.com/health
+      method: GET
+      interval: 30s
+      timeout: 5s
+      response_format: json
 `),
 			},
 		}
@@ -60,11 +61,11 @@ checks:
 		assert.Equal(t, "/metrics", cfg.Prometheus.Path)
 		assert.Len(t, cfg.Environments, 1)
 		assert.Equal(t, "test", cfg.Environments[0].Name)
-		assert.Len(t, cfg.Checks, 1)
-		assert.Equal(t, "health-check", cfg.Checks[0].Name)
-		assert.Equal(t, "GET", cfg.Checks[0].Method)
-		assert.Equal(t, 30*time.Second, cfg.Checks[0].Interval)
-		assert.Equal(t, 5*time.Second, cfg.Checks[0].Timeout)
+		assert.Len(t, cfg.Checks.HTTP, 1)
+		assert.Equal(t, "health-check", cfg.Checks.HTTP[0].Name)
+		assert.Equal(t, "GET", cfg.Checks.HTTP[0].Method)
+		assert.Equal(t, 30*time.Second, cfg.Checks.HTTP[0].Interval)
+		assert.Equal(t, 5*time.Second, cfg.Checks.HTTP[0].Timeout)
 	})
 
 	t.Run("MultipleEnvironments", func(t *testing.T) {
@@ -80,12 +81,13 @@ environments:
       api_url: https://api.stage.com
 
 checks:
-  - name: health-check
-    environments: [prod, stage]
-    endpoint: https://api.test.com/health
-    method: GET
-    interval: 10s
-    timeout: 5s
+  http:
+    - name: health-check
+      environments: [prod, stage]
+      endpoint: https://api.test.com/health
+      method: GET
+      interval: 10s
+      timeout: 5s
 `),
 			},
 		}
@@ -129,15 +131,16 @@ environments:
   - name: test
 
 checks:
-  - name: api-check
-    environments: [test]
-    endpoint: https://api.test.com
-    method: POST
-    interval: 10s
-    timeout: 5s
-    headers:
-      Authorization: Bearer token
-      Content-Type: application/json
+  http:
+    - name: api-check
+      environments: [test]
+      endpoint: https://api.test.com
+      method: POST
+      interval: 10s
+      timeout: 5s
+      headers:
+        Authorization: Bearer token
+        Content-Type: application/json
 `),
 			},
 		}
@@ -145,10 +148,10 @@ checks:
 		cfg, err := LoadWithReader("config.yaml", reader)
 
 		require.NoError(t, err)
-		assert.Len(t, cfg.Checks, 1)
-		assert.Len(t, cfg.Checks[0].Headers, 2)
-		assert.Equal(t, InterpolatedString("Bearer token"), cfg.Checks[0].Headers["Authorization"])
-		assert.Equal(t, InterpolatedString("application/json"), cfg.Checks[0].Headers["Content-Type"])
+		assert.Len(t, cfg.Checks.HTTP, 1)
+		assert.Len(t, cfg.Checks.HTTP[0].Headers, 2)
+		assert.Equal(t, InterpolatedString("Bearer token"), cfg.Checks.HTTP[0].Headers["Authorization"])
+		assert.Equal(t, InterpolatedString("application/json"), cfg.Checks.HTTP[0].Headers["Content-Type"])
 	})
 
 	t.Run("WithTags", func(t *testing.T) {
@@ -159,13 +162,14 @@ environments:
   - name: test
 
 checks:
-  - name: critical-check
-    environments: [test]
-    endpoint: https://api.test.com
-    method: GET
-    interval: 10s
-    timeout: 5s
-    tags: [critical, api, health]
+  http:
+    - name: critical-check
+      environments: [test]
+      endpoint: https://api.test.com
+      method: GET
+      interval: 10s
+      timeout: 5s
+      tags: [critical, api, health]
 `),
 			},
 		}
@@ -173,8 +177,8 @@ checks:
 		cfg, err := LoadWithReader("config.yaml", reader)
 
 		require.NoError(t, err)
-		assert.Len(t, cfg.Checks, 1)
-		assert.Equal(t, []string{"critical", "api", "health"}, cfg.Checks[0].Tags)
+		assert.Len(t, cfg.Checks.HTTP, 1)
+		assert.Equal(t, []string{"critical", "api", "health"}, cfg.Checks.HTTP[0].Tags)
 	})
 
 	t.Run("ResponseFormats", func(t *testing.T) {
@@ -198,13 +202,14 @@ environments:
   - name: test
 
 checks:
-  - name: test-check
-    environments: [test]
-    endpoint: https://api.test.com
-    method: GET
-    interval: 10s
-    timeout: 5s
-    response_format: ` + tt.format + `
+  http:
+    - name: test-check
+      environments: [test]
+      endpoint: https://api.test.com
+      method: GET
+      interval: 10s
+      timeout: 5s
+      response_format: ` + tt.format + `
 `),
 					},
 				}
@@ -212,7 +217,7 @@ checks:
 				cfg, err := LoadWithReader("config.yaml", reader)
 
 				require.NoError(t, err)
-				assert.Equal(t, tt.expectedFormat, cfg.Checks[0].ResponseFormat)
+				assert.Equal(t, tt.expectedFormat, cfg.Checks.HTTP[0].ResponseFormat)
 			})
 		}
 	})
@@ -225,14 +230,15 @@ environments:
   - name: test
 
 checks:
-  - name: assertion-check
-    environments: [test]
-    endpoint: https://api.test.com
-    method: GET
-    interval: 10s
-    timeout: 5s
-    response_format: json
-    assertion: "code == 200 && body.status == 'ok'"
+  http:
+    - name: assertion-check
+      environments: [test]
+      endpoint: https://api.test.com
+      method: GET
+      interval: 10s
+      timeout: 5s
+      response_format: json
+      assertion: "code == 200 && body.status == 'ok'"
 `),
 			},
 		}
@@ -240,7 +246,7 @@ checks:
 		cfg, err := LoadWithReader("config.yaml", reader)
 
 		require.NoError(t, err)
-		assert.Equal(t, "code == 200 && body.status == 'ok'", cfg.Checks[0].Assertion)
+		assert.Equal(t, "code == 200 && body.status == 'ok'", cfg.Checks.HTTP[0].Assertion)
 	})
 
 	t.Run("EmptyConfig", func(t *testing.T) {
@@ -254,7 +260,7 @@ checks:
 
 		require.NoError(t, err)
 		assert.Len(t, cfg.Environments, 0)
-		assert.Len(t, cfg.Checks, 0)
+		assert.Len(t, cfg.Checks.HTTP, 0)
 	})
 }
 
