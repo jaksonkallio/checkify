@@ -445,6 +445,407 @@ func TestConvertHTTPChecks(t *testing.T) {
 	})
 }
 
+func TestConvertPingChecks(t *testing.T) {
+	t.Run("BasicSuccess", func(t *testing.T) {
+		envProvider := MockEnvProvider{
+			Vars: map[string]string{},
+		}
+
+		cfg := config.Config{
+			Environments: []config.Environment{
+				{
+					Name: "test",
+					Vars: map[string]config.InterpolatedString{
+						"ping_host": config.InterpolatedString("example.com"),
+					},
+				},
+			},
+			Checks: config.Checks{
+				Ping: []config.PingCheck{
+					{
+						Name:         "ping-check",
+						Environments: []string{"test"},
+						Host:         config.InterpolatedString("${var.ping_host}"),
+						Interval:     30 * time.Second,
+						Count:        5,
+						Timeout:      10 * time.Second,
+					},
+				},
+			},
+		}
+
+		pingChecks, err := convertPingChecks(cfg, envProvider)
+
+		require.NoError(t, err)
+		require.Len(t, pingChecks, 1)
+		assert.Equal(t, "ping-check", pingChecks[0].Name)
+		assert.Equal(t, "example.com", pingChecks[0].Evaluator.(*evaluator.PingCheckEvaluator).Host)
+		assert.Equal(t, "test", pingChecks[0].Environment)
+		assert.Equal(t, 5, pingChecks[0].Evaluator.(*evaluator.PingCheckEvaluator).Count)
+	})
+
+	t.Run("EnvInterpolation", func(t *testing.T) {
+		envProvider := MockEnvProvider{
+			Vars: map[string]string{
+				"TARGET_HOST": "google.com",
+				"DOMAIN":      "example.com",
+			},
+		}
+
+		cfg := config.Config{
+			Environments: []config.Environment{
+				{
+					Name: "prod",
+					Vars: map[string]config.InterpolatedString{
+						"host": config.InterpolatedString("${env.TARGET_HOST}"),
+					},
+				},
+			},
+			Checks: config.Checks{
+				Ping: []config.PingCheck{
+					{
+						Name:         "ping-check",
+						Environments: []string{"prod"},
+						Host:         config.InterpolatedString("${var.host}"),
+						Interval:     30 * time.Second,
+						Count:        3,
+						Timeout:      5 * time.Second,
+					},
+				},
+			},
+		}
+
+		pingChecks, err := convertPingChecks(cfg, envProvider)
+
+		require.NoError(t, err)
+		require.Len(t, pingChecks, 1)
+		assert.Equal(t, "google.com", pingChecks[0].Evaluator.(*evaluator.PingCheckEvaluator).Host)
+	})
+
+	t.Run("VarInterpolation", func(t *testing.T) {
+		envProvider := MockEnvProvider{
+			Vars: map[string]string{},
+		}
+
+		cfg := config.Config{
+			Environments: []config.Environment{
+				{
+					Name: "test",
+					Vars: map[string]config.InterpolatedString{
+						"base_host": config.InterpolatedString("api"),
+						"domain":    config.InterpolatedString("example.com"),
+					},
+				},
+			},
+			Checks: config.Checks{
+				Ping: []config.PingCheck{
+					{
+						Name:         "composed-host",
+						Environments: []string{"test"},
+						Host:         config.InterpolatedString("${var.base_host}.${var.domain}"),
+						Interval:     30 * time.Second,
+						Count:        3,
+						Timeout:      5 * time.Second,
+					},
+				},
+			},
+		}
+
+		pingChecks, err := convertPingChecks(cfg, envProvider)
+
+		require.NoError(t, err)
+		require.Len(t, pingChecks, 1)
+		assert.Equal(t, "api.example.com", pingChecks[0].Evaluator.(*evaluator.PingCheckEvaluator).Host)
+	})
+
+	t.Run("EnvThenVarInterpolation", func(t *testing.T) {
+		envProvider := MockEnvProvider{
+			Vars: map[string]string{
+				"PROD_HOST":  "prod.example.com",
+				"STAGE_HOST": "stage.example.com",
+			},
+		}
+
+		cfg := config.Config{
+			Environments: []config.Environment{
+				{
+					Name: "prod",
+					Vars: map[string]config.InterpolatedString{
+						"target": config.InterpolatedString("${env.PROD_HOST}"),
+					},
+				},
+			},
+			Checks: config.Checks{
+				Ping: []config.PingCheck{
+					{
+						Name:         "ping-check",
+						Environments: []string{"prod"},
+						Host:         config.InterpolatedString("${var.target}"),
+						Interval:     30 * time.Second,
+						Count:        5,
+						Timeout:      10 * time.Second,
+					},
+				},
+			},
+		}
+
+		pingChecks, err := convertPingChecks(cfg, envProvider)
+
+		require.NoError(t, err)
+		require.Len(t, pingChecks, 1)
+		assert.Equal(t, "prod.example.com", pingChecks[0].Evaluator.(*evaluator.PingCheckEvaluator).Host)
+	})
+
+	t.Run("MultipleEnvironments", func(t *testing.T) {
+		envProvider := MockEnvProvider{
+			Vars: map[string]string{},
+		}
+
+		cfg := config.Config{
+			Environments: []config.Environment{
+				{
+					Name: "prod",
+					Vars: map[string]config.InterpolatedString{
+						"host": config.InterpolatedString("prod.example.com"),
+					},
+				},
+				{
+					Name: "stage",
+					Vars: map[string]config.InterpolatedString{
+						"host": config.InterpolatedString("stage.example.com"),
+					},
+				},
+			},
+			Checks: config.Checks{
+				Ping: []config.PingCheck{
+					{
+						Name:         "ping-check",
+						Environments: []string{"prod", "stage"}, // Should create 2 checks
+						Host:         config.InterpolatedString("${var.host}"),
+						Interval:     30 * time.Second,
+						Count:        3,
+						Timeout:      5 * time.Second,
+					},
+				},
+			},
+		}
+
+		pingChecks, err := convertPingChecks(cfg, envProvider)
+
+		require.NoError(t, err)
+		require.Len(t, pingChecks, 2)
+
+		// Check prod environment
+		assert.Equal(t, "ping-check", pingChecks[0].Name)
+		assert.Equal(t, "prod.example.com", pingChecks[0].Evaluator.(*evaluator.PingCheckEvaluator).Host)
+		assert.Equal(t, "prod", pingChecks[0].Environment)
+
+		// Check stage environment
+		assert.Equal(t, "ping-check", pingChecks[1].Name)
+		assert.Equal(t, "stage.example.com", pingChecks[1].Evaluator.(*evaluator.PingCheckEvaluator).Host)
+		assert.Equal(t, "stage", pingChecks[1].Environment)
+	})
+
+	t.Run("UninterpolatedEnvPlaceholder", func(t *testing.T) {
+		envProvider := MockEnvProvider{
+			Vars: map[string]string{
+				// MISSING_VAR is not provided
+			},
+		}
+
+		cfg := config.Config{
+			Environments: []config.Environment{
+				{
+					Name: "test",
+					Vars: map[string]config.InterpolatedString{
+						"host": config.InterpolatedString("${env.MISSING_VAR}.com"),
+					},
+				},
+			},
+			Checks: config.Checks{
+				Ping: []config.PingCheck{
+					{
+						Name:         "test-check",
+						Environments: []string{"test"},
+						Host:         config.InterpolatedString("${var.host}"),
+						Interval:     30 * time.Second,
+						Count:        3,
+						Timeout:      5 * time.Second,
+					},
+				},
+			},
+		}
+
+		_, err := convertPingChecks(cfg, envProvider)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "uninterpolated placeholder")
+		assert.Contains(t, err.Error(), "test")
+		assert.Contains(t, err.Error(), "host")
+	})
+
+	t.Run("UninterpolatedVarPlaceholder", func(t *testing.T) {
+		envProvider := MockEnvProvider{
+			Vars: map[string]string{},
+		}
+
+		cfg := config.Config{
+			Environments: []config.Environment{
+				{
+					Name: "test",
+					Vars: map[string]config.InterpolatedString{
+						"host": config.InterpolatedString("example.com"),
+					},
+				},
+			},
+			Checks: config.Checks{
+				Ping: []config.PingCheck{
+					{
+						Name:         "test-check",
+						Environments: []string{"test"},
+						Host:         config.InterpolatedString("${var.NONEXISTENT}"),
+						Interval:     30 * time.Second,
+						Count:        3,
+						Timeout:      5 * time.Second,
+					},
+				},
+			},
+		}
+
+		_, err := convertPingChecks(cfg, envProvider)
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "uninterpolated placeholder")
+		assert.Contains(t, err.Error(), "host")
+	})
+
+	t.Run("WithTags", func(t *testing.T) {
+		envProvider := MockEnvProvider{
+			Vars: map[string]string{},
+		}
+
+		cfg := config.Config{
+			Environments: []config.Environment{
+				{
+					Name: "test",
+					Vars: map[string]config.InterpolatedString{
+						"host": config.InterpolatedString("example.com"),
+					},
+				},
+			},
+			Checks: config.Checks{
+				Ping: []config.PingCheck{
+					{
+						Name:         "tagged-check",
+						Environments: []string{"test"},
+						Host:         config.InterpolatedString("${var.host}"),
+						Interval:     30 * time.Second,
+						Count:        3,
+						Timeout:      5 * time.Second,
+						Tags:         []string{"critical", "network", "latency"},
+					},
+				},
+			},
+		}
+
+		pingChecks, err := convertPingChecks(cfg, envProvider)
+
+		require.NoError(t, err)
+		require.Len(t, pingChecks, 1)
+		assert.Equal(t, []string{"critical", "network", "latency"}, pingChecks[0].Tags)
+	})
+
+	t.Run("WithAssertion", func(t *testing.T) {
+		envProvider := MockEnvProvider{
+			Vars: map[string]string{},
+		}
+
+		cfg := config.Config{
+			Environments: []config.Environment{
+				{
+					Name: "test",
+					Vars: map[string]config.InterpolatedString{
+						"host": config.InterpolatedString("example.com"),
+					},
+				},
+			},
+			Checks: config.Checks{
+				Ping: []config.PingCheck{
+					{
+						Name:         "check-with-assertion",
+						Environments: []string{"test"},
+						Host:         config.InterpolatedString("${var.host}"),
+						Interval:     30 * time.Second,
+						Count:        5,
+						Timeout:      10 * time.Second,
+						Assertion:    `avg_rtt_ms < 100 && packet_loss_pct == 0.0`,
+					},
+				},
+			},
+		}
+
+		pingChecks, err := convertPingChecks(cfg, envProvider)
+
+		require.NoError(t, err)
+		require.Len(t, pingChecks, 1)
+		// Assertion is an implementation detail, just verify the check was created successfully
+		assert.NotNil(t, pingChecks[0].Evaluator)
+	})
+
+	t.Run("WithIPStack", func(t *testing.T) {
+		envProvider := MockEnvProvider{
+			Vars: map[string]string{},
+		}
+
+		testCases := []struct {
+			name     string
+			ipStack  string
+			expected evaluator.IPStack
+		}{
+			{"IPv4", "ipv4", evaluator.IPStackIPv4},
+			{"IPv6", "ipv6", evaluator.IPStackIPv6},
+			{"Any", "any", evaluator.IPStackAny},
+			{"Empty", "", evaluator.IPStackAny},
+			{"Uppercase", "IPV4", evaluator.IPStackIPv4},
+			{"MixedCase", "IPv6", evaluator.IPStackIPv6},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				cfg := config.Config{
+					Environments: []config.Environment{
+						{
+							Name: "test",
+							Vars: map[string]config.InterpolatedString{
+								"host": config.InterpolatedString("example.com"),
+							},
+						},
+					},
+					Checks: config.Checks{
+						Ping: []config.PingCheck{
+							{
+								Name:         "ipstack-check",
+								Environments: []string{"test"},
+								Host:         config.InterpolatedString("${var.host}"),
+								Interval:     30 * time.Second,
+								Count:        3,
+								Timeout:      5 * time.Second,
+								IPStack:      tc.ipStack,
+							},
+						},
+					},
+				}
+
+				pingChecks, err := convertPingChecks(cfg, envProvider)
+
+				require.NoError(t, err)
+				require.Len(t, pingChecks, 1)
+				assert.Equal(t, tc.expected, pingChecks[0].Evaluator.(*evaluator.PingCheckEvaluator).IPStack)
+			})
+		}
+	})
+}
+
 func TestConvertResponseFormat(t *testing.T) {
 	tests := []struct {
 		name     string
