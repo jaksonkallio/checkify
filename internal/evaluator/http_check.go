@@ -19,7 +19,8 @@ const (
 	FormatBinary ResponseFormat = "binary"
 	FormatNone   ResponseFormat = "none"
 
-	MaxHTTPTimeout = 30 * time.Minute
+	DefaultHTTPTimeout = 10 * time.Second
+	MaxHTTPTimeout     = 30 * time.Minute
 )
 
 type ErrCheckTimeout struct {

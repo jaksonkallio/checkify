@@ -226,6 +226,76 @@
             },
             "additionalProperties": false
           }
+        },
+        "tcp": {
+          "type": "array",
+          "description": "TCP connection checks",
+          "items": {
+            "type": "object",
+            "required": ["name", "environments", "host", "port", "interval"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Unique check name",
+                "minLength": 1,
+                "examples": ["database-tcp-check", "redis-connection"]
+              },
+              "environments": {
+                "type": "array",
+                "description": "List of environments to run this check in",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "examples": [["prod", "staging"]]
+              },
+              "host": {
+                "type": "string",
+                "description": "Host to connect to - domain name, IPv4, or IPv6 (supports ${var.NAME} and ${env.VAR} interpolation)",
+                "minLength": 1,
+                "examples": [
+                  "database.example.com",
+                  "192.168.1.100",
+                  "${var.db_host}"
+                ]
+              },
+              "port": {
+                "type": "integer",
+                "description": "TCP port number to connect to",
+                "minimum": 1,
+                "maximum": 65535,
+                "examples": [80, 443, 3306, 5432, 6379]
+              },
+              "interval": {
+                "type": "string",
+                "description": "Check interval (e.g., 10s, 1m)",
+                "pattern": "^[0-9]+(ns|us|ms|s|m|h)$",
+                "examples": ["10s", "30s", "1m"]
+              },
+              "timeout": {
+                "type": "string",
+                "description": "Connection timeout (default: 5s)",
+                "pattern": "^[0-9]+(ns|us|ms|s|m|h)$",
+                "examples": ["5s", "10s", "30s"]
+              },
+              "ip_stack": {
+                "type": "string",
+                "description": "IP stack to use for connection",
+                "enum": ["ipv4", "ipv6", "any"],
+                "default": "any",
+                "examples": ["ipv4", "ipv6", "any"]
+              },
+              "tags": {
+                "type": "array",
+                "description": "Tags for organizing and filtering checks",
+                "items": {
+                  "type": "string"
+                },
+                "examples": [["critical", "database", "infrastructure"]]
+              }
+            },
+            "additionalProperties": false
+          }
         }
       },
       "additionalProperties": false
