@@ -108,7 +108,6 @@ func (c *TCPCheckEvaluator) Evaluate(ctx context.Context) CheckResult {
 	start := time.Now()
 	conn, err := c.dialer.DialContext(ctx, network, address)
 	latency := time.Since(start)
-
 	if err != nil {
 		return CheckResult{
 			Pass:    false,
@@ -116,8 +115,7 @@ func (c *TCPCheckEvaluator) Evaluate(ctx context.Context) CheckResult {
 			Err:     err,
 		}
 	}
-
-	conn.Close()
+	defer conn.Close()
 
 	return CheckResult{
 		Pass:    true,
