@@ -47,6 +47,7 @@ environments:
 Now that the environments have been configured, it's time to create the actual checks. There are several different types of checks:
 
 - **HTTP Checks** run against an HTTP service endpoint. Assert pass/fail based on status code, parsed response body, and headers. The most common type of check.
+- **TCP Checks** attempts to open a TCP connection to a specified host and port.
 - **Ping Checks** sends pings to hosts. Assert pass/fail based on ping statistics. Note that ping checks require special permissions, see the dedicated Ping Check section below for more information.
 
 In the config file, checks are defined like so:
@@ -54,8 +55,8 @@ In the config file, checks are defined like so:
 ```yaml
 checks:
   http: # Array of HTTP checks here
+  tcp: # Array of TCP checks here
   ping: # Array of ping checks here
-  dns: # Array of DNS checks here
 ```
 
 Common to all check types are these configuration properties:
@@ -104,14 +105,38 @@ checks:
 - `body` is a map if `response_format: json`, or a string if `response_format: string`, or bytes if `response_format: binary`, or null if `response_format: none`.
 - `headers` is a map with string keys and string values.
 
+### TCP Checks
+
+TCP checks attempt to establish a TCP connection to a specified host and port. The check passes if the connection is successfully established and fails otherwise. This is useful for verifying that services are listening on their expected ports.
+
+#### Configuring TCP Checks
+
+```yaml
+checks:
+  tcp:
+    - name: github-ssh
+      environments: [prod]
+      host: github.com
+      port: 22
+      timeout: 5s
+      interval: 1m
+      tags: [health, external-service]
+```
+
+`host` is the hostname or IP address to connect to.
+
+`port` is the TCP port number to connect to.
+
+`timeout` will cancel the connection attempt and fail the check if exceeded.
+
 ### Ping Checks
 
 #### Docker and Privileges
-ICMP-based ping checks require the Linux capability `CAP_NET_RAW`. This capability is not available in rootless Docker, and therefore ICMP ping checks cannot function in that mode.
+Ping checks require the Linux capability `CAP_NET_RAW`. This capability is not available in rootless Docker, and therefore ICMP ping checks cannot function in that mode.
 
-This limitation exists because ICMP echo requests require access to raw sockets, which the Linux kernel intentionally restricts to privileged containers for security reasons.
+This limitation exists because access to raw sockets is required, which the Linux kernel intentionally restricts to privileged containers for security reasons.
 
-If `CAP_NET_RAW` is not available, ping checks will fail with an error like `socket: permission denied`. In such environments, consider using alternative check types (HTTP) instead to test reachability.
+If `CAP_NET_RAW` is not available, ping checks will fail with an error like `socket: permission denied`. In such environments, consider using alternative check types (HTTP, TCP) instead to test reachability.
 
 #### Configuring Ping Checks
 
