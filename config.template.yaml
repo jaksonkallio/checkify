@@ -45,3 +45,11 @@ checks:
       interval: 2m
       tags: [health, external-service]
       assertion: packets_received > 0 && packet_loss_pct < 20.0 && avg_rtt_ms < 2000
+  tcp:
+    - name: github-ssh
+      environments: [prod]
+      host: github.com
+      port: 22
+      timeout: 5s
+      interval: 1m
+      tags: [health, external-service]

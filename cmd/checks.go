@@ -45,6 +45,10 @@ func convertHTTPChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.
 				method = c.Method
 			}
 
+			if c.Timeout == 0 {
+				c.Timeout = evaluator.DefaultHTTPTimeout
+			}
+
 			check, err := evaluator.NewHTTPCheck(
 				c.Name,
 				endpoint,
@@ -88,6 +92,10 @@ func convertPingChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.
 				return nil, fmt.Errorf("host contains uninterpolated placeholder")
 			}
 
+			if c.Timeout == 0 {
+				c.Timeout = evaluator.DefaultPingTimeout
+			}
+
 			if c.Count == 0 {
 				c.Count = 1
 			}
@@ -112,6 +120,59 @@ func convertPingChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.
 			)
 			if err != nil {
 				return nil, fmt.Errorf("create ping check %s for environment %s: %w", c.Name, envName, err)
+			}
+
+			checks = append(checks, check)
+		}
+	}
+	return checks, nil
+}
+
+func convertTCPChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.Check, error) {
+	envInterpolator, varInterpolators, err := setupInterpolators(cfg, envProvider)
+	if err != nil {
+		return nil, err
+	}
+
+	var checks []evaluator.Check
+	for _, c := range cfg.Checks.TCP {
+		for _, envName := range c.Environments {
+			environmentVarsInterpolator, ok := varInterpolators[envName]
+			if !ok {
+				return nil, fmt.Errorf("no interpolator found for environment %q", envName)
+			}
+
+			interpolatorSet := config.NewInterpolatorSet(envInterpolator, environmentVarsInterpolator)
+
+			host := interpolatorSet.InterpolateMany(c.Host)
+			if interpolatorSet.ContainsPlaceholder(host) {
+				return nil, fmt.Errorf("host contains uninterpolated placeholder")
+			}
+
+			timeout := c.Timeout
+			if timeout == 0 {
+				timeout = evaluator.DefaultTCPTimeout
+			}
+
+			var ipStack evaluator.IPStack
+			if len(c.IPStack) == 0 {
+				ipStack = evaluator.IPStackDefault
+			} else {
+				ipStack = evaluator.IPStack(strings.ToLower(c.IPStack))
+			}
+
+			check, err := evaluator.NewTCPCheck(
+				c.Name,
+				host,
+				c.Port,
+				c.Interval,
+				timeout,
+				ipStack,
+				envName,
+				c.Tags,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("create TCP check %s for environment %s: %w", c.Name, envName, err)
 			}
 
 			checks = append(checks, check)

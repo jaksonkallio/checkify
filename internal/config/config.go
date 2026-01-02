@@ -8,6 +8,7 @@ import (
 type Checks struct {
 	HTTP []HTTPCheck `yaml:"http"`
 	Ping []PingCheck `yaml:"ping"`
+	TCP  []TCPCheck  `yaml:"tcp"`
 }
 
 type Config struct {
@@ -53,6 +54,17 @@ type PingCheck struct {
 	Tags         []string           `yaml:"tags"`
 	IPStack      string             `yaml:"ip_stack"`
 	Assertion    string             `yaml:"assertion"`
+}
+
+type TCPCheck struct {
+	Name         string             `yaml:"name"`
+	Timeout      time.Duration      `yaml:"timeout"`
+	Interval     time.Duration      `yaml:"interval"`
+	Environments []string           `yaml:"environments"`
+	Host         InterpolatedString `yaml:"host"`
+	Port         int                `yaml:"port"`
+	IPStack      string             `yaml:"ip_stack"`
+	Tags         []string           `yaml:"tags"`
 }
 
 type ResponseFormat string
