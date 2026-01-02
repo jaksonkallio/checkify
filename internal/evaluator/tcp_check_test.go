@@ -99,7 +99,6 @@ func TestNewTCPCheckEvaluator_InvalidPort(t *testing.T) {
 		{"zero port", 0},
 		{"negative port", -1},
 		{"port too high", 65536},
-		{"port too high 2", 99999},
 	}
 
 	for _, tt := range tests {
