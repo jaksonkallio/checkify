@@ -67,6 +67,7 @@ Now that the environments have been configured, it's time to create the actual c
 - **HTTP Checks** run against an HTTP service endpoint. Assert pass/fail based on status code, parsed response body, and headers. The most common type of check.
 - **TCP Checks** attempts to open a TCP connection to a specified host and port.
 - **Ping Checks** sends pings to hosts. Assert pass/fail based on ping statistics. Note that ping checks require special permissions, see the dedicated Ping Check section below for more information.
+- **DNS Checks** performs DNS queries against a specified DNS server. Assert pass/fail based on response code, record count, and other DNS-specific attributes.
 
 In the config file, checks are defined like so:
 
@@ -75,6 +76,7 @@ checks:
   http: # Array of HTTP checks here
   tcp: # Array of TCP checks here
   ping: # Array of ping checks here
+  dns: # Array of DNS checks here
 ```
 
 Common to all check types are these configuration properties:
@@ -189,6 +191,51 @@ checks:
 - `packets_received` is the number of packets received (int).
 - `packets_received_dup` is the number of duplicate packets received (int).
 - `packets_sent` is the number of packets sent (int).
+
+### DNS Checks
+
+DNS checks perform DNS queries against a specified DNS server and validate the response. The check passes if the DNS query succeeds and the assertion (if provided) evaluates to true. This is useful for monitoring DNS server health, verifying DNS record configuration, and detecting DNS resolution issues.
+
+#### Configuring DNS Checks
+
+```yaml
+checks:
+  dns:
+    - name: google-dns-check
+      environments: [prod]
+      query: google.com
+      record_type: A
+      host: 8.8.8.8
+      port: 53
+      timeout: 5s
+      interval: 5m
+      ip_stack: any
+      tags: [dns, external-service]
+      assertion: |
+        rcode == "NOERROR" &&
+        record_count > 0
+```
+
+`query` is the domain name to query.
+
+`record_type` must be one of: `A`, `AAAA`, `CNAME`, `MX`, `TXT`, `NS`, or `SOA`.
+
+`host` is the DNS server hostname or IP address to query.
+
+`port` is the DNS server port number (defaults to 53 if not specified).
+
+`timeout` will cancel the DNS query and fail the check if exceeded.
+
+`ip_stack` must be either `ipv6`, `ipv4`, or `any`. This impacts the DNS query, not the returned record type (e.g. A vs AAAA).
+
+`assertion` is a CEL expression that resolves to either `true` / `false`, indicating whether the assertion is true. Within the CEL expression, you may use the following variables:
+
+- `records` is a list of strings containing the DNS record values returned in the response.
+- `record_count` is the number of records returned (int).
+- `ttl` is the minimum TTL value from the response records in seconds (int).
+- `authoritative` is whether the response is authoritative (bool).
+- `rcode` is the DNS response code as a string (e.g., `"NOERROR"`, `"NXDOMAIN"`, `"SERVFAIL"`).
+- `truncated` is whether the response was truncated (bool).
 
 ## Monitoring
 
