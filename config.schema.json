@@ -296,6 +296,103 @@
             },
             "additionalProperties": false
           }
+        },
+        "dns": {
+          "type": "array",
+          "description": "DNS resolution checks",
+          "items": {
+            "type": "object",
+            "required": ["name", "environments", "query", "record_type", "host", "interval"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Unique check name",
+                "minLength": 1,
+                "examples": ["google-dns-check", "internal-dns-resolution"]
+              },
+              "environments": {
+                "type": "array",
+                "description": "List of environments to run this check in",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "examples": [["prod", "staging"]]
+              },
+              "query": {
+                "type": "string",
+                "description": "Domain name to resolve (supports ${var.NAME} and ${env.VAR} interpolation)",
+                "minLength": 1,
+                "examples": [
+                  "google.com",
+                  "example.org",
+                  "${var.domain_name}"
+                ]
+              },
+              "record_type": {
+                "type": "string",
+                "description": "DNS record type to query",
+                "enum": ["A", "AAAA", "CNAME", "MX", "TXT", "NS", "SOA"],
+                "examples": ["A", "AAAA", "CNAME", "MX", "TXT"]
+              },
+              "host": {
+                "type": "string",
+                "description": "DNS server to query - IP address or hostname (supports ${var.NAME} and ${env.VAR} interpolation)",
+                "minLength": 1,
+                "examples": [
+                  "8.8.8.8",
+                  "1.1.1.1",
+                  "dns.google",
+                  "${var.dns_server}"
+                ]
+              },
+              "port": {
+                "type": "integer",
+                "description": "DNS server port (default: 53)",
+                "minimum": 1,
+                "maximum": 65535,
+                "default": 53,
+                "examples": [53, 5353]
+              },
+              "interval": {
+                "type": "string",
+                "description": "Check interval (e.g., 30s, 5m)",
+                "pattern": "^[0-9]+(ns|us|ms|s|m|h)$",
+                "examples": ["30s", "1m", "5m"]
+              },
+              "timeout": {
+                "type": "string",
+                "description": "DNS query timeout (default: 5s, max: 30s)",
+                "pattern": "^[0-9]+(ns|us|ms|s|m|h)$",
+                "examples": ["3s", "5s", "10s"]
+              },
+              "ip_stack": {
+                "type": "string",
+                "description": "IP stack to use for connecting to DNS server",
+                "enum": ["ipv4", "ipv6", "any"],
+                "default": "any",
+                "examples": ["ipv4", "ipv6", "any"]
+              },
+              "tags": {
+                "type": "array",
+                "description": "Tags for organizing and filtering checks",
+                "items": {
+                  "type": "string"
+                },
+                "examples": [["dns", "external-service", "critical"]]
+              },
+              "assertion": {
+                "type": "string",
+                "description": "CEL expression to validate DNS results (available variables: records, record_count, ttl, authoritative, rcode, truncated)",
+                "examples": [
+                  "rcode == \"NOERROR\" && record_count > 0",
+                  "record_count > 0 && ttl >= 300",
+                  "rcode == \"NOERROR\" && authoritative == true"
+                ]
+              }
+            },
+            "additionalProperties": false
+          }
         }
       },
       "additionalProperties": false
