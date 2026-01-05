@@ -2,6 +2,8 @@ Declarative HTTP, TCP, DNS, and ping checks with multi-environment support. Chec
 
 See [demo/README.md](demo/README.md) for a demo.
 
+![checkify metrics exposed in grafana via visualization panels](docs/screenshot.png)
+
 ## Features
 
 - **Declarative YAML Configuration**: Define checks with endpoints, assertions, and intervals in YAML.
