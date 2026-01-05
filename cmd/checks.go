@@ -181,6 +181,74 @@ func convertTCPChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.C
 	return checks, nil
 }
 
+func convertDNSChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.Check, error) {
+	envInterpolator, varInterpolators, err := setupInterpolators(cfg, envProvider)
+	if err != nil {
+		return nil, err
+	}
+
+	var checks []evaluator.Check
+	for _, c := range cfg.Checks.DNS {
+		for _, envName := range c.Environments {
+			environmentVarsInterpolator, ok := varInterpolators[envName]
+			if !ok {
+				return nil, fmt.Errorf("no interpolator found for environment %q", envName)
+			}
+
+			interpolatorSet := config.NewInterpolatorSet(envInterpolator, environmentVarsInterpolator)
+
+			query := interpolatorSet.InterpolateMany(c.Query)
+			if interpolatorSet.ContainsPlaceholder(query) {
+				return nil, fmt.Errorf("query contains uninterpolated placeholder")
+			}
+
+			host := interpolatorSet.InterpolateMany(c.Host)
+			if interpolatorSet.ContainsPlaceholder(host) {
+				return nil, fmt.Errorf("host contains uninterpolated placeholder")
+			}
+
+			timeout := c.Timeout
+			if timeout == 0 {
+				timeout = evaluator.DefaultDNSTimeout
+			}
+
+			port := c.Port
+			if port == 0 {
+				port = evaluator.DefaultDNSPort
+			}
+
+			var ipStack evaluator.IPStack
+			if len(c.IPStack) == 0 {
+				ipStack = evaluator.IPStackDefault
+			} else {
+				ipStack = evaluator.IPStack(strings.ToLower(c.IPStack))
+			}
+
+			recordType := evaluator.DNSRecordType(strings.ToUpper(c.RecordType))
+
+			check, err := evaluator.NewDNSCheck(
+				c.Name,
+				query,
+				recordType,
+				host,
+				port,
+				c.Interval,
+				timeout,
+				ipStack,
+				envName,
+				c.Tags,
+				c.Assertion,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("create DNS check %s for environment %s: %w", c.Name, envName, err)
+			}
+
+			checks = append(checks, check)
+		}
+	}
+	return checks, nil
+}
+
 func setupInterpolators(cfg config.Config, envProvider EnvProvider) (*config.Interpolator, map[string]*config.Interpolator, error) {
 	// Set the env interpolator with all env vars.
 	envInterpolator := config.NewInterpolator("env")

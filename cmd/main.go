@@ -67,15 +67,19 @@ func evaluatorCmd(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("convert ping checks: %w", err)
 	}
+	checks := append(httpChecks, pingChecks...)
 
 	tcpChecks, err := convertTCPChecks(config, OSEnvProvider{})
 	if err != nil {
 		return fmt.Errorf("convert TCP checks: %w", err)
 	}
-
-	// Combine all checks into a single slice
-	checks := append(httpChecks, pingChecks...)
 	checks = append(checks, tcpChecks...)
+
+	dnsChecks, err := convertDNSChecks(config, OSEnvProvider{})
+	if err != nil {
+		return fmt.Errorf("convert DNS checks: %w", err)
+	}
+	checks = append(checks, dnsChecks...)
 
 	if config.Prometheus.Enabled() {
 		// Serve prometheus metrics.
@@ -116,9 +120,15 @@ func evaluateOnceCmd(ctx context.Context) error {
 		return fmt.Errorf("convert TCP checks: %w", err)
 	}
 
+	dnsChecks, err := convertDNSChecks(config, OSEnvProvider{})
+	if err != nil {
+		return fmt.Errorf("convert DNS checks: %w", err)
+	}
+
 	// Combine all checks into a single slice
 	checks := append(httpChecks, pingChecks...)
 	checks = append(checks, tcpChecks...)
+	checks = append(checks, dnsChecks...)
 
 	// Note that when evaluating once, the Prometheus metrics server is not started as metrics should not be collected for one-off runes.
 
@@ -151,9 +161,15 @@ func validateCmd(ctx context.Context) error {
 		return fmt.Errorf("convert TCP checks: %w", err)
 	}
 
+	dnsChecks, err := convertDNSChecks(config, OSEnvProvider{})
+	if err != nil {
+		return fmt.Errorf("convert DNS checks: %w", err)
+	}
+
 	// Combine all checks into a single slice
 	checks := append(httpChecks, pingChecks...)
 	checks = append(checks, tcpChecks...)
+	checks = append(checks, dnsChecks...)
 
 	if err := evaluator.ValidateCheckSet(checks); err != nil {
 		return fmt.Errorf("validate check set: %w", err)

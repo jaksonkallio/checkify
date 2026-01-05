@@ -9,6 +9,7 @@ type Checks struct {
 	HTTP []HTTPCheck `yaml:"http"`
 	Ping []PingCheck `yaml:"ping"`
 	TCP  []TCPCheck  `yaml:"tcp"`
+	DNS  []DNSCheck  `yaml:"dns"`
 }
 
 type Config struct {
@@ -65,6 +66,20 @@ type TCPCheck struct {
 	Port         int                `yaml:"port"`
 	IPStack      string             `yaml:"ip_stack"`
 	Tags         []string           `yaml:"tags"`
+}
+
+type DNSCheck struct {
+	Name         string             `yaml:"name"`
+	Timeout      time.Duration      `yaml:"timeout"`
+	Interval     time.Duration      `yaml:"interval"`
+	Environments []string           `yaml:"environments"`
+	Query        InterpolatedString `yaml:"query"`
+	RecordType   string             `yaml:"record_type"`
+	Host         InterpolatedString `yaml:"host"`
+	Port         int                `yaml:"port"`
+	IPStack      string             `yaml:"ip_stack"`
+	Tags         []string           `yaml:"tags"`
+	Assertion    string             `yaml:"assertion"`
 }
 
 type ResponseFormat string

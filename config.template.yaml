@@ -53,3 +53,17 @@ checks:
       timeout: 5s
       interval: 1m
       tags: [health, external-service]
+  dns:
+    - name: google-dns-check
+      environments: [prod]
+      query: google.com
+      record_type: A
+      host: 8.8.8.8
+      port: 53
+      timeout: 5s
+      interval: 5m
+      ip_stack: any
+      tags: [dns, external-service]
+      assertion: |
+        rcode == "NOERROR" &&
+        record_count > 0
