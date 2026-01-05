@@ -54,7 +54,7 @@ checks:
       interval: 1m
       tags: [health, external-service]
   dns:
-    - name: google-dns-resolution
+    - name: google-dns-check
       environments: [prod]
       query: google.com
       record_type: A
