@@ -2,6 +2,24 @@
 
 See [`config.template.yaml`](./config.template.yaml) for a complete example configuration.
 
+## Location
+
+The configuration file is expected to be located at `/app/config.yaml` inside the container. You should mount your configuration file on the host to this path. Checkify does not need write access to the config file, so feel free to include `:ro` in your volume mount.
+
+In docker compose:
+```yaml
+services:
+  checkify:
+    # ...
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+```
+
+With docker run:
+```bash
+docker run -v ./config.yaml:/app/config.yaml:ro checkify/checkify:latest
+```
+
 ## Interpolation
 
 The configuration supports basic interpolation:
