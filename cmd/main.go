@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/messari/checkify/internal/config"
-	"github.com/messari/checkify/internal/evaluator"
-	"github.com/messari/checkify/internal/metrics"
+	"github.com/jaksonkallio/checkify/internal/config"
+	"github.com/jaksonkallio/checkify/internal/evaluator"
+	"github.com/jaksonkallio/checkify/internal/metrics"
 )
 
 var commands = map[string]func(ctx context.Context) error{

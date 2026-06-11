@@ -93,7 +93,7 @@ func (c *TCPCheckEvaluator) Evaluate(ctx context.Context) CheckResult {
 		}
 	}
 
-	network := "tcp"
+	var network string
 	switch c.IPStack {
 	case IPStackIPv4:
 		network = "tcp4"
@@ -115,7 +115,7 @@ func (c *TCPCheckEvaluator) Evaluate(ctx context.Context) CheckResult {
 			Err:     err,
 		}
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	return CheckResult{
 		Pass:    true,

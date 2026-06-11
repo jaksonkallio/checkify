@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/messari/checkify/internal/config"
-	"github.com/messari/checkify/internal/evaluator"
+	"github.com/jaksonkallio/checkify/internal/config"
+	"github.com/jaksonkallio/checkify/internal/evaluator"
 )
 
 func convertHTTPChecks(cfg config.Config, envProvider EnvProvider) ([]evaluator.Check, error) {
