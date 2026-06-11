@@ -1,4 +1,4 @@
-module github.com/messari/checkify
+module github.com/jaksonkallio/checkify
 
 go 1.25.4
 
