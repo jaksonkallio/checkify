@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/messari/checkify/internal/config"
-	"github.com/messari/checkify/internal/evaluator"
+	"github.com/jaksonkallio/checkify/internal/config"
+	"github.com/jaksonkallio/checkify/internal/evaluator"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
