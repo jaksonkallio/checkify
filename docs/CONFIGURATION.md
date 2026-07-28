@@ -122,8 +122,20 @@ checks:
 `assertion` is a CEL expression that resolves to either `true` / `false`, indicating whether the assertion is true. Within the CEL expression, you may use the following variables:
 
 - `code` is the status code (int) of the request.
-- `body` is a map if `response_format: json`, or a string if `response_format: string`, or bytes if `response_format: binary`, or null if `response_format: none`.
+- `body` is the decoded response: any JSON value if `response_format: json`, a string if `response_format: string`, bytes if `response_format: binary`, or null if `response_format: none`.
 - `headers` is a map with string keys and string values.
+
+With `response_format: json`, `body` takes whatever shape the response has. A JSON object becomes a map, an array becomes a list, and a bare number, string, boolean or `null` becomes that value. So an endpoint returning a top-level array is asserted on directly:
+
+```yaml
+# Response: [{"id": "a"}, {"id": "b"}]
+assertion: |
+  code == 200 &&
+  size(body) > 1 &&
+  body.all(entry, entry.id != "")
+```
+
+Note that JSON numbers decode as doubles, so compare them against double literals (`body.total > 10.0`, not `body.total > 10`). Use `double(...)` when a field could be either.
 
 ### TCP Checks
 

@@ -130,7 +130,7 @@
               },
               "response_format": {
                 "type": "string",
-                "description": "Expected response format for assertion evaluation",
+                "description": "Expected response format for assertion evaluation. With \"json\", the body may be any JSON value: an object becomes a map, an array becomes a list",
                 "enum": ["json", "string", "binary", "none"],
                 "default": "none",
                 "examples": ["json"]
