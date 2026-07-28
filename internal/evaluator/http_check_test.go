@@ -135,6 +135,106 @@ func TestCheck_Evaluate(t *testing.T) {
 			mockClient.AssertExpectations(t)
 		})
 
+		// A JSON body does not have to be an object. Each of these decodes into a
+		// different Go type via `any`, and the assertion exercises it as a CEL value.
+		t.Run("JSONNonObject", func(t *testing.T) {
+			tests := []struct {
+				name      string
+				body      string
+				assertion string
+			}{
+				{
+					// The shape that motivated this: a top-level array of objects,
+					// e.g. Messari's /screener/v1/catalog/asset.
+					name:      "ArrayOfObjects",
+					body:      `[{"id":"a","n":1},{"id":"b","n":2}]`,
+					assertion: `code == 200 && size(body) == 2 && body.all(e, e.id != "")`,
+				},
+				{
+					name:      "ArrayOfScalars",
+					body:      `[1, 2, 3]`,
+					assertion: `code == 200 && size(body) == 3 && body.all(v, v > 0.0)`,
+				},
+				{
+					// Timeseries-style points: an array of arrays.
+					name:      "ArrayOfArrays",
+					body:      `[[1730000001, 1.5], [1730000002, 2.5]]`,
+					assertion: `code == 200 && size(body) == 2 && body.all(p, size(p) == 2 && p[1] > 1.0)`,
+				},
+				{
+					name:      "EmptyArray",
+					body:      `[]`,
+					assertion: `code == 200 && size(body) == 0`,
+				},
+				{
+					// Leading whitespace is legal JSON, so format detection must not
+					// depend on the first byte of the body.
+					name:      "ArrayWithLeadingWhitespace",
+					body:      "  \n\t[{\"id\":\"a\"}]",
+					assertion: `code == 200 && size(body) == 1`,
+				},
+				{
+					name:      "TopLevelString",
+					body:      `"pong"`,
+					assertion: `code == 200 && body == "pong"`,
+				},
+				{
+					name:      "TopLevelNumber",
+					body:      `42`,
+					assertion: `code == 200 && body == 42.0`,
+				},
+				{
+					name:      "TopLevelBool",
+					body:      `true`,
+					assertion: `code == 200 && body`,
+				},
+				{
+					name:      "TopLevelNull",
+					body:      `null`,
+					assertion: `code == 200 && body == null`,
+				},
+				{
+					// Objects must keep working exactly as before.
+					name:      "Object",
+					body:      `{"status":"ok","uptime":12345}`,
+					assertion: `code == 200 && body.status == "ok" && body.uptime == 12345.0`,
+				},
+			}
+
+			for _, tt := range tests {
+				t.Run(tt.name, func(t *testing.T) {
+					mockClient := new(MockHTTPClient)
+					mockClient.On("Do", mock.Anything).Return(&http.Response{
+						StatusCode: 200,
+						Body:       io.NopCloser(strings.NewReader(tt.body)),
+						Header:     http.Header{},
+					}, nil)
+
+					check, err := NewHTTPCheck(
+						"test",
+						"https://api.test.com/catalog",
+						"GET",
+						10*time.Second,
+						5*time.Second,
+						"test",
+						nil,
+						nil,
+						FormatJSON,
+						tt.assertion,
+					)
+					require.NoError(t, err)
+					httpEval := check.Evaluator.(*HTTPCheckEvaluator)
+					httpEval.httpClient = mockClient
+
+					result := httpEval.Evaluate(context.Background())
+
+					assert.NoError(t, result.Err)
+					assert.True(t, result.Pass)
+					mockClient.AssertExpectations(t)
+				})
+			}
+		})
+
 		t.Run("String", func(t *testing.T) {
 			mockClient := new(MockHTTPClient)
 			mockClient.On("Do", mock.Anything).Return(&http.Response{

@@ -134,7 +134,7 @@ func (c *HTTPCheckEvaluator) Evaluate(ctx context.Context) CheckResult {
 	var responseData any
 	switch c.ResponseFormat {
 	case FormatJSON:
-		var jsonData map[string]any
+		var jsonData any
 		if err := json.Unmarshal(body, &jsonData); err != nil {
 			return CheckResult{
 				Err:     fmt.Errorf("parse JSON response: %w", err),
