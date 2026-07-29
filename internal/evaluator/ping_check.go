@@ -3,6 +3,7 @@ package evaluator
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/cel-go/cel"
@@ -199,13 +200,25 @@ func (c *PingCheckEvaluator) Evaluate(ctx context.Context) CheckResult {
 	// Use average RTT as the latency metric.
 	latency := stats.AvgRtt
 
+	// Packet counts and RTT spread explain both passes and non-passes, and the average RTT
+	// reported as the latency hides partial packet loss on its own.
+	logAttrs := []slog.Attr{
+		slog.Int("pingPacketsSent", stats.PacketsSent),
+		slog.Int("pingPacketsReceived", stats.PacketsRecv),
+		slog.Int("pingPacketsReceivedDuplicate", stats.PacketsRecvDuplicates),
+		slog.Float64("pingPacketLossPct", stats.PacketLoss),
+		slog.Int64("pingMinRTTMs", stats.MinRtt.Milliseconds()),
+		slog.Int64("pingMaxRTTMs", stats.MaxRtt.Milliseconds()),
+	}
+
 	var pass bool
 	if c.assertionProgram != nil {
 		assertionPasses, err := c.evaluateAssertion(stats)
 		if err != nil {
 			return CheckResult{
-				Err:     fmt.Errorf("evaluate assertion: %w", err),
-				Latency: latency,
+				Err:      fmt.Errorf("evaluate assertion: %w", err),
+				Latency:  latency,
+				LogAttrs: logAttrs,
 			}
 		}
 		pass = assertionPasses
@@ -215,9 +228,10 @@ func (c *PingCheckEvaluator) Evaluate(ctx context.Context) CheckResult {
 	}
 
 	return CheckResult{
-		Pass:    pass,
-		Latency: latency,
-		Err:     nil,
+		Pass:     pass,
+		Latency:  latency,
+		Err:      nil,
+		LogAttrs: logAttrs,
 	}
 }
 

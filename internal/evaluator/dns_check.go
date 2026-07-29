@@ -3,6 +3,7 @@ package evaluator
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"strconv"
 	"strings"
@@ -196,14 +197,26 @@ func (c *DNSCheckEvaluator) Evaluate(ctx context.Context) CheckResult {
 		}
 	}
 
+	// The response detail explains both passes and non-passes, so it is attached to every result from here on.
+	// Records are what assertions are written against, and a DNS answer is small enough to log whole.
+	logAttrs := []slog.Attr{
+		slog.String("dnsRcode", result.Rcode),
+		slog.Int("dnsRecordCount", len(result.Records)),
+		slog.Any("dnsRecords", result.Records),
+		slog.Uint64("dnsTTL", uint64(result.TTL)),
+		slog.Bool("dnsAuthoritative", result.Authoritative),
+		slog.Bool("dnsTruncated", result.Truncated),
+	}
+
 	// Default to pass if no assertion
 	var pass bool
 	if c.assertionProgram != nil {
 		assertionPasses, err := c.evaluateAssertion(result)
 		if err != nil {
 			return CheckResult{
-				Err:     fmt.Errorf("evaluate assertion: %w", err),
-				Latency: latency,
+				Err:      fmt.Errorf("evaluate assertion: %w", err),
+				Latency:  latency,
+				LogAttrs: logAttrs,
 			}
 		}
 		pass = assertionPasses
@@ -213,9 +226,10 @@ func (c *DNSCheckEvaluator) Evaluate(ctx context.Context) CheckResult {
 	}
 
 	return CheckResult{
-		Pass:    pass,
-		Latency: latency,
-		Err:     nil,
+		Pass:     pass,
+		Latency:  latency,
+		Err:      nil,
+		LogAttrs: logAttrs,
 	}
 }
 

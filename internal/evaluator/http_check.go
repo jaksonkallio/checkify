@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -121,14 +122,23 @@ func (c *HTTPCheckEvaluator) Evaluate(ctx context.Context) CheckResult {
 			Latency: latency,
 		}
 	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// The status code helps diagnose both passes and non-passes, so it is attached to every result from here on.
+	logAttrs := []slog.Attr{
+		slog.Int("httpStatusCode", resp.StatusCode),
+	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return CheckResult{
-			Err:     fmt.Errorf("read response body: %w", err),
-			Latency: latency,
+			Err:      fmt.Errorf("read response body: %w", err),
+			Latency:  latency,
+			LogAttrs: logAttrs,
 		}
 	}
+
+	logAttrs = append(logAttrs, slog.Int("httpBodySize", len(body)))
 
 	// Parse response based on format
 	var responseData any
@@ -136,9 +146,12 @@ func (c *HTTPCheckEvaluator) Evaluate(ctx context.Context) CheckResult {
 	case FormatJSON:
 		var jsonData any
 		if err := json.Unmarshal(body, &jsonData); err != nil {
+			// The start of the body is usually enough to see why it is not JSON, such as an HTML error page.
+			// `httpBodySize` tells the reader whether the logged prefix is the whole body.
 			return CheckResult{
-				Err:     fmt.Errorf("parse JSON response: %w", err),
-				Latency: latency,
+				Err:      fmt.Errorf("parse JSON response: %w", err),
+				Latency:  latency,
+				LogAttrs: append(logAttrs, slog.String("httpBodyPrefix", truncateForLog(body))),
 			}
 		}
 		responseData = jsonData
@@ -157,8 +170,9 @@ func (c *HTTPCheckEvaluator) Evaluate(ctx context.Context) CheckResult {
 		assertionPasses, err := c.evaluateAssertion(responseData, resp)
 		if err != nil {
 			return CheckResult{
-				Err:     fmt.Errorf("evaluate assertion: %w", err),
-				Latency: latency,
+				Err:      fmt.Errorf("evaluate assertion: %w", err),
+				Latency:  latency,
+				LogAttrs: logAttrs,
 			}
 		}
 		pass = assertionPasses
@@ -167,9 +181,10 @@ func (c *HTTPCheckEvaluator) Evaluate(ctx context.Context) CheckResult {
 	}
 
 	return CheckResult{
-		Pass:    pass,
-		Latency: latency,
-		Err:     nil,
+		Pass:     pass,
+		Latency:  latency,
+		Err:      nil,
+		LogAttrs: logAttrs,
 	}
 }
 
@@ -228,12 +243,6 @@ func (c *HTTPCheckEvaluator) evaluateAssertion(responseData interface{}, resp *h
 	}
 
 	return result, nil
-}
-
-type CheckResult struct {
-	Pass    bool
-	Latency time.Duration
-	Err     error
 }
 
 // HTTPClient interface allows mocking HTTP requests for testing

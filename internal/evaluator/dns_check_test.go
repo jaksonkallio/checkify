@@ -3,6 +3,7 @@ package evaluator
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -628,5 +629,105 @@ func TestDNSCheck_IPStack(t *testing.T) {
 				t.Errorf("expected IP stack %q, got %q", tc.ipStack, evaluator.IPStack)
 			}
 		})
+	}
+}
+
+func TestDNSCheck_LogAttrsOnPass(t *testing.T) {
+	evaluator, err := NewDNSCheckEvaluator("example.com", RecordTypeA, "8.8.8.8", 53, 5*time.Second, IPStackAny, "")
+	if err != nil {
+		t.Fatalf("failed to create evaluator: %v", err)
+	}
+
+	evaluator.resolver = &MockDNSResolver{
+		ResolveFunc: func(ctx context.Context, host string, recordType DNSRecordType) (DNSResult, error) {
+			return DNSResult{
+				Records:       []string{"1.2.3.4", "5.6.7.8"},
+				TTL:           300,
+				Authoritative: true,
+				Rcode:         "NOERROR",
+				Truncated:     false,
+			}, nil
+		},
+	}
+
+	result := evaluator.Evaluate(context.Background())
+
+	if !result.Pass {
+		t.Error("expected check to pass")
+	}
+
+	if got := logAttr(t, result, "dnsRcode").String(); got != "NOERROR" {
+		t.Errorf("expected dnsRcode NOERROR, got %q", got)
+	}
+
+	if got := logAttr(t, result, "dnsRecordCount").Int64(); got != 2 {
+		t.Errorf("expected dnsRecordCount 2, got %d", got)
+	}
+
+	if got := logAttr(t, result, "dnsRecords").Any(); !reflect.DeepEqual(got, []string{"1.2.3.4", "5.6.7.8"}) {
+		t.Errorf("expected dnsRecords to hold both records, got %v", got)
+	}
+
+	if got := logAttr(t, result, "dnsTTL").Uint64(); got != 300 {
+		t.Errorf("expected dnsTTL 300, got %d", got)
+	}
+
+	if !logAttr(t, result, "dnsAuthoritative").Bool() {
+		t.Error("expected dnsAuthoritative to be true")
+	}
+
+	if logAttr(t, result, "dnsTruncated").Bool() {
+		t.Error("expected dnsTruncated to be false")
+	}
+}
+
+func TestDNSCheck_LogAttrsOnNonPass(t *testing.T) {
+	evaluator, err := NewDNSCheckEvaluator("example.com", RecordTypeA, "8.8.8.8", 53, 5*time.Second, IPStackAny, "")
+	if err != nil {
+		t.Fatalf("failed to create evaluator: %v", err)
+	}
+
+	evaluator.resolver = &MockDNSResolver{
+		ResolveFunc: func(ctx context.Context, host string, recordType DNSRecordType) (DNSResult, error) {
+			return DNSResult{Records: []string{}, Rcode: "NXDOMAIN"}, nil
+		},
+	}
+
+	result := evaluator.Evaluate(context.Background())
+
+	if result.Pass {
+		t.Error("expected check to not pass")
+	}
+
+	if got := logAttr(t, result, "dnsRcode").String(); got != "NXDOMAIN" {
+		t.Errorf("expected dnsRcode NXDOMAIN, got %q", got)
+	}
+
+	if got := logAttr(t, result, "dnsRecordCount").Int64(); got != 0 {
+		t.Errorf("expected dnsRecordCount 0, got %d", got)
+	}
+}
+
+func TestDNSCheck_LogAttrsOnQueryFailure(t *testing.T) {
+	evaluator, err := NewDNSCheckEvaluator("example.com", RecordTypeA, "8.8.8.8", 53, 5*time.Second, IPStackAny, "")
+	if err != nil {
+		t.Fatalf("failed to create evaluator: %v", err)
+	}
+
+	evaluator.resolver = &MockDNSResolver{
+		ResolveFunc: func(ctx context.Context, host string, recordType DNSRecordType) (DNSResult, error) {
+			return DNSResult{}, errors.New("i/o timeout")
+		},
+	}
+
+	result := evaluator.Evaluate(context.Background())
+
+	if result.Err == nil {
+		t.Fatal("expected an error")
+	}
+
+	// There is no response to describe, so no DNS attributes are attached.
+	if len(result.LogAttrs) != 0 {
+		t.Errorf("expected no log attributes, got %v", result.LogAttrs)
 	}
 }

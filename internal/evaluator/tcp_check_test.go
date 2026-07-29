@@ -296,3 +296,62 @@ func TestTCPCheck_NetworkTypeIPv6(t *testing.T) {
 	assert.NoError(t, result.Err)
 	assert.True(t, result.Pass)
 }
+
+func TestTCPCheck_LogAttrs(t *testing.T) {
+	t.Run("NetworkAndRemoteAddrOnPass", func(t *testing.T) {
+		check, err := NewTCPCheck("test-tcp", "example.com", 443, 10*time.Second, 5*time.Second, IPStackIPv4, "test", nil)
+		require.NoError(t, err)
+		check.Evaluator.(*TCPCheckEvaluator).dialer = &MockDialer{
+			DialContextFunc: func(ctx context.Context, network, address string) (net.Conn, error) {
+				return &mockConnWithRemoteAddr{}, nil
+			},
+		}
+
+		result := check.Evaluator.Evaluate(context.Background())
+
+		require.True(t, result.Pass)
+		assert.Equal(t, "tcp4", logAttr(t, result, "tcpNetwork").String())
+		assert.Equal(t, "93.184.216.34:443", logAttr(t, result, "tcpRemoteAddr").String())
+	})
+
+	t.Run("NetworkOnDialFailure", func(t *testing.T) {
+		check, err := NewTCPCheck("test-tcp", "example.com", 443, 10*time.Second, 5*time.Second, IPStackIPv6, "test", nil)
+		require.NoError(t, err)
+		check.Evaluator.(*TCPCheckEvaluator).dialer = &MockDialer{
+			DialContextFunc: func(ctx context.Context, network, address string) (net.Conn, error) {
+				return nil, errors.New("connection refused")
+			},
+		}
+
+		result := check.Evaluator.Evaluate(context.Background())
+
+		require.Error(t, result.Err)
+		assert.Equal(t, "tcp6", logAttr(t, result, "tcpNetwork").String())
+		assert.False(t, hasLogAttr(result, "tcpRemoteAddr"))
+	})
+
+	t.Run("RemoteAddrOmittedWhenUnavailable", func(t *testing.T) {
+		check, err := NewTCPCheck("test-tcp", "example.com", 443, 10*time.Second, 5*time.Second, IPStackAny, "test", nil)
+		require.NoError(t, err)
+		// mockConn reports a nil remote address, as a connection may before it is fully established.
+		check.Evaluator.(*TCPCheckEvaluator).dialer = &MockDialer{
+			DialContextFunc: func(ctx context.Context, network, address string) (net.Conn, error) {
+				return &mockConn{}, nil
+			},
+		}
+
+		result := check.Evaluator.Evaluate(context.Background())
+
+		require.True(t, result.Pass)
+		assert.False(t, hasLogAttr(result, "tcpRemoteAddr"))
+	})
+}
+
+// mockConnWithRemoteAddr is a mock connection that reports a remote address, unlike mockConn.
+type mockConnWithRemoteAddr struct {
+	mockConn
+}
+
+func (m *mockConnWithRemoteAddr) RemoteAddr() net.Addr {
+	return &net.TCPAddr{IP: net.ParseIP("93.184.216.34"), Port: 443}
+}
