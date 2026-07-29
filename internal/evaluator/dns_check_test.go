@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -664,8 +665,8 @@ func TestDNSCheck_LogAttrsOnPass(t *testing.T) {
 		t.Errorf("expected dnsRecordCount 2, got %d", got)
 	}
 
-	if got := logAttr(t, result, "dnsRecords").Any(); !reflect.DeepEqual(got, []string{"1.2.3.4", "5.6.7.8"}) {
-		t.Errorf("expected dnsRecords to hold both records, got %v", got)
+	if got := logAttr(t, result, "dnsRecordSample").Any(); !reflect.DeepEqual(got, []string{"1.2.3.4", "5.6.7.8"}) {
+		t.Errorf("expected dnsRecordSample to hold both records, got %v", got)
 	}
 
 	if got := logAttr(t, result, "dnsTTL").Uint64(); got != 300 {
@@ -729,5 +730,52 @@ func TestDNSCheck_LogAttrsOnQueryFailure(t *testing.T) {
 	// There is no response to describe, so no DNS attributes are attached.
 	if len(result.LogAttrs) != 0 {
 		t.Errorf("expected no log attributes, got %v", result.LogAttrs)
+	}
+}
+
+func TestDNSCheck_LogAttrsRecordSampleIsCapped(t *testing.T) {
+	evaluator, err := NewDNSCheckEvaluator("example.com", RecordTypeTXT, "8.8.8.8", 53, 5*time.Second, IPStackAny, "")
+	if err != nil {
+		t.Fatalf("failed to create evaluator: %v", err)
+	}
+
+	// A long TXT value stands in for a verification token, which must not reach the log whole.
+	longRecord := strings.Repeat("t", MaxLoggedPayloadLength+500)
+	records := make([]string, 0, MaxLoggedListItems+10)
+	for range MaxLoggedListItems + 10 {
+		records = append(records, longRecord)
+	}
+
+	evaluator.resolver = &MockDNSResolver{
+		ResolveFunc: func(ctx context.Context, host string, recordType DNSRecordType) (DNSResult, error) {
+			return DNSResult{Records: records, TTL: 60, Rcode: "NOERROR"}, nil
+		},
+	}
+
+	result := evaluator.Evaluate(context.Background())
+
+	sample, ok := logAttr(t, result, "dnsRecordSample").Any().([]string)
+	if !ok {
+		t.Fatalf("expected dnsRecordSample to be a []string, got %T", logAttr(t, result, "dnsRecordSample").Any())
+	}
+
+	if len(sample) != MaxLoggedListItems {
+		t.Errorf("expected dnsRecordSample to hold %d records, got %d", MaxLoggedListItems, len(sample))
+	}
+
+	for i, record := range sample {
+		if len(record) != MaxLoggedPayloadLength {
+			t.Errorf("expected sampled record %d to be truncated to %d characters, got %d", i, MaxLoggedPayloadLength, len(record))
+		}
+	}
+
+	// The full count is still reported, so a capped sample is never mistaken for the whole answer.
+	if got := logAttr(t, result, "dnsRecordCount").Int64(); got != int64(len(records)) {
+		t.Errorf("expected dnsRecordCount %d, got %d", len(records), got)
+	}
+
+	// The resolved records themselves are untouched, so assertions still see the full values.
+	if len(records[0]) != MaxLoggedPayloadLength+500 {
+		t.Error("expected the resolved records to be left unmodified")
 	}
 }

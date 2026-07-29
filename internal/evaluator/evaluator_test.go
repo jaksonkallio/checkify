@@ -2,6 +2,7 @@ package evaluator
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"strings"
 	"testing"
@@ -266,17 +267,17 @@ func TestCheckResultLogArgs(t *testing.T) {
 
 func TestTruncateForLog(t *testing.T) {
 	t.Run("ShortPayloadKeptWhole", func(t *testing.T) {
-		assert.Equal(t, "retry later", truncateForLog([]byte("retry later")))
+		assert.Equal(t, "retry later", truncateForLog("retry later"))
 	})
 
 	t.Run("SurroundingWhitespaceTrimmed", func(t *testing.T) {
-		assert.Equal(t, "retry later", truncateForLog([]byte("\n  retry later\n")))
+		assert.Equal(t, "retry later", truncateForLog("\n  retry later\n"))
 	})
 
 	t.Run("LongPayloadTruncated", func(t *testing.T) {
 		payload := strings.Repeat("a", MaxLoggedPayloadLength+50)
 
-		truncated := truncateForLog([]byte(payload))
+		truncated := truncateForLog(payload)
 
 		assert.Len(t, truncated, MaxLoggedPayloadLength)
 	})
@@ -285,13 +286,71 @@ func TestTruncateForLog(t *testing.T) {
 		// Each rune is 3 bytes, so a byte-wise cut would leave an invalid character at the end.
 		payload := strings.Repeat("あ", MaxLoggedPayloadLength+10)
 
-		truncated := truncateForLog([]byte(payload))
+		truncated := truncateForLog(payload)
 
 		assert.True(t, utf8.ValidString(truncated))
 		assert.Equal(t, MaxLoggedPayloadLength, utf8.RuneCountInString(truncated))
 	})
 
 	t.Run("EmptyPayload", func(t *testing.T) {
-		assert.Equal(t, "", truncateForLog(nil))
+		assert.Equal(t, "", truncateForLog(""))
+	})
+}
+
+func TestTruncateListForLog(t *testing.T) {
+	t.Run("ShortListKeptWhole", func(t *testing.T) {
+		values := []string{"1.2.3.4", "5.6.7.8"}
+
+		assert.Equal(t, values, truncateListForLog(values))
+	})
+
+	t.Run("LongListCapped", func(t *testing.T) {
+		values := make([]string, 0, MaxLoggedListItems+20)
+		for i := range MaxLoggedListItems + 20 {
+			values = append(values, fmt.Sprintf("record-%d", i))
+		}
+
+		truncated := truncateListForLog(values)
+
+		require.Len(t, truncated, MaxLoggedListItems)
+		// The retained items are the first ones, unmodified.
+		assert.Equal(t, values[:MaxLoggedListItems], truncated)
+	})
+
+	t.Run("LongValuesTruncated", func(t *testing.T) {
+		token := strings.Repeat("t", MaxLoggedPayloadLength+200)
+
+		truncated := truncateListForLog([]string{"short", token})
+
+		require.Len(t, truncated, 2)
+		assert.Equal(t, "short", truncated[0])
+		assert.Len(t, truncated[1], MaxLoggedPayloadLength)
+	})
+
+	t.Run("BothCapsAppliedTogether", func(t *testing.T) {
+		values := make([]string, 0, MaxLoggedListItems+5)
+		for range MaxLoggedListItems + 5 {
+			values = append(values, strings.Repeat("t", MaxLoggedPayloadLength+200))
+		}
+
+		truncated := truncateListForLog(values)
+
+		require.Len(t, truncated, MaxLoggedListItems)
+		for _, value := range truncated {
+			assert.Len(t, value, MaxLoggedPayloadLength)
+		}
+	})
+
+	t.Run("EmptyList", func(t *testing.T) {
+		assert.Nil(t, truncateListForLog(nil))
+		assert.Nil(t, truncateListForLog([]string{}))
+	})
+
+	t.Run("DoesNotMutateInput", func(t *testing.T) {
+		values := []string{strings.Repeat("t", MaxLoggedPayloadLength+10)}
+
+		truncateListForLog(values)
+
+		assert.Len(t, values[0], MaxLoggedPayloadLength+10)
 	})
 }

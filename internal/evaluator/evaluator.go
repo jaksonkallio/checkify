@@ -20,6 +20,9 @@ const (
 
 	// MaxLoggedPayloadLength bounds how much of a check's response payload is copied into a log attribute.
 	MaxLoggedPayloadLength = 100
+
+	// MaxLoggedListItems bounds how many items of a check's response list are copied into a log attribute.
+	MaxLoggedListItems = 5
 )
 
 // CheckEvaluator interface defines the evaluation behavior specific to each check type
@@ -58,8 +61,8 @@ func checkResultLogArgs(check Check, result CheckResult) []any {
 
 // truncateForLog returns at most MaxLoggedPayloadLength characters of the given payload,
 // so that a log attribute cannot grow with the size of a check's response.
-func truncateForLog(payload []byte) string {
-	trimmed := strings.TrimSpace(string(payload))
+func truncateForLog(payload string) string {
+	trimmed := strings.TrimSpace(payload)
 
 	// Cut on runes rather than bytes so multi-byte characters are never split.
 	runes := []rune(trimmed)
@@ -68,6 +71,28 @@ func truncateForLog(payload []byte) string {
 	}
 
 	return string(runes[:MaxLoggedPayloadLength])
+}
+
+// truncateListForLog returns at most MaxLoggedListItems of the given values, each truncated by
+// truncateForLog. Individual values can be long and can carry sensitive strings, such as a DNS TXT
+// record holding a domain verification token, so a log attribute never holds a whole list verbatim.
+// Callers should log the untruncated item count alongside the result.
+func truncateListForLog(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+
+	capped := values
+	if len(capped) > MaxLoggedListItems {
+		capped = capped[:MaxLoggedListItems]
+	}
+
+	truncated := make([]string, 0, len(capped))
+	for _, value := range capped {
+		truncated = append(truncated, truncateForLog(value))
+	}
+
+	return truncated
 }
 
 // Check contains common metadata and delegates evaluation to a CheckEvaluator

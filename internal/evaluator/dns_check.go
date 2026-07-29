@@ -198,11 +198,13 @@ func (c *DNSCheckEvaluator) Evaluate(ctx context.Context) CheckResult {
 	}
 
 	// The response detail explains both passes and non-passes, so it is attached to every result from here on.
-	// Records are what assertions are written against, and a DNS answer is small enough to log whole.
+	// Records are what assertions are written against, but a record value can be long and can hold a
+	// sensitive string such as a TXT verification token, so only a capped and truncated sample is logged.
+	// `dnsRecordCount` always reports the full count.
 	logAttrs := []slog.Attr{
 		slog.String("dnsRcode", result.Rcode),
 		slog.Int("dnsRecordCount", len(result.Records)),
-		slog.Any("dnsRecords", result.Records),
+		slog.Any("dnsRecordSample", truncateListForLog(result.Records)),
 		slog.Uint64("dnsTTL", uint64(result.TTL)),
 		slog.Bool("dnsAuthoritative", result.Authoritative),
 		slog.Bool("dnsTruncated", result.Truncated),

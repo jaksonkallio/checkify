@@ -151,7 +151,7 @@ func (c *HTTPCheckEvaluator) Evaluate(ctx context.Context) CheckResult {
 			return CheckResult{
 				Err:      fmt.Errorf("parse JSON response: %w", err),
 				Latency:  latency,
-				LogAttrs: append(logAttrs, slog.String("httpBodyPrefix", truncateForLog(body))),
+				LogAttrs: append(logAttrs, slog.String("httpBodyPrefix", truncateForLog(string(body)))),
 			}
 		}
 		responseData = jsonData
