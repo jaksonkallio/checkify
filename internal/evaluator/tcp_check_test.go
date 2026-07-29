@@ -333,7 +333,7 @@ func TestTCPCheck_LogAttrs(t *testing.T) {
 	t.Run("RemoteAddrOmittedWhenUnavailable", func(t *testing.T) {
 		check, err := NewTCPCheck("test-tcp", "example.com", 443, 10*time.Second, 5*time.Second, IPStackAny, "test", nil)
 		require.NoError(t, err)
-		// mockConn reports a nil remote address, as a connection may before it is fully established.
+		// mockConn reports a nil remote address, as a connection may be nil before it is fully established.
 		check.Evaluator.(*TCPCheckEvaluator).dialer = &MockDialer{
 			DialContextFunc: func(ctx context.Context, network, address string) (net.Conn, error) {
 				return &mockConn{}, nil
