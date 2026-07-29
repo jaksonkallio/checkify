@@ -404,3 +404,65 @@ func TestDefaultPinger_IPv6(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, stats)
 }
+
+func TestPingCheck_LogAttrs(t *testing.T) {
+	t.Run("PacketStatisticsOnPass", func(t *testing.T) {
+		check, err := NewPingCheck("test-ping", "8.8.8.8", 10*time.Second, 4, 5*time.Second, "test", nil, IPStackAny, "")
+		require.NoError(t, err)
+		check.Evaluator.(*PingCheckEvaluator).pinger = &MockPinger{
+			RunFunc: func(ctx context.Context) (PingStatistics, error) {
+				return PingStatistics{
+					PacketsSent:           4,
+					PacketsRecv:           3,
+					PacketsRecvDuplicates: 1,
+					PacketLoss:            25,
+					AvgRtt:                20 * time.Millisecond,
+					MinRtt:                10 * time.Millisecond,
+					MaxRtt:                30 * time.Millisecond,
+				}, nil
+			},
+		}
+
+		result := check.Evaluator.Evaluate(context.Background())
+
+		require.True(t, result.Pass)
+		assert.Equal(t, int64(4), logAttr(t, result, "pingPacketsSent").Int64())
+		assert.Equal(t, int64(3), logAttr(t, result, "pingPacketsReceived").Int64())
+		assert.Equal(t, int64(1), logAttr(t, result, "pingPacketsReceivedDuplicate").Int64())
+		assert.Equal(t, float64(25), logAttr(t, result, "pingPacketLossPct").Float64())
+		assert.Equal(t, int64(10), logAttr(t, result, "pingMinRTTMs").Int64())
+		assert.Equal(t, int64(30), logAttr(t, result, "pingMaxRTTMs").Int64())
+	})
+
+	t.Run("PacketStatisticsOnAssertionNonPass", func(t *testing.T) {
+		check, err := NewPingCheck("test-ping", "8.8.8.8", 10*time.Second, 4, 5*time.Second, "test", nil, IPStackAny, "packet_loss_pct == 0.0")
+		require.NoError(t, err)
+		check.Evaluator.(*PingCheckEvaluator).pinger = &MockPinger{
+			RunFunc: func(ctx context.Context) (PingStatistics, error) {
+				return PingStatistics{PacketsSent: 4, PacketsRecv: 2, PacketLoss: 50}, nil
+			},
+		}
+
+		result := check.Evaluator.Evaluate(context.Background())
+
+		require.False(t, result.Pass)
+		require.NoError(t, result.Err)
+		assert.Equal(t, float64(50), logAttr(t, result, "pingPacketLossPct").Float64())
+		assert.Equal(t, int64(2), logAttr(t, result, "pingPacketsReceived").Int64())
+	})
+
+	t.Run("NoAttributesWhenPingFails", func(t *testing.T) {
+		check, err := NewPingCheck("test-ping", "8.8.8.8", 10*time.Second, 4, 5*time.Second, "test", nil, IPStackAny, "")
+		require.NoError(t, err)
+		check.Evaluator.(*PingCheckEvaluator).pinger = &MockPinger{
+			RunFunc: func(ctx context.Context) (PingStatistics, error) {
+				return PingStatistics{}, errors.New("no such host")
+			},
+		}
+
+		result := check.Evaluator.Evaluate(context.Background())
+
+		require.Error(t, result.Err)
+		assert.Empty(t, result.LogAttrs)
+	})
+}

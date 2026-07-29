@@ -17,11 +17,82 @@ const (
 	MaxEnvironmentLength = 20
 	MaxTags              = 10
 	MaxTagLength         = 20
+
+	// MaxLoggedPayloadLength bounds how much of a check's response payload is copied into a log attribute.
+	MaxLoggedPayloadLength = 100
+
+	// MaxLoggedListItems bounds how many items of a check's response list are copied into a log attribute.
+	MaxLoggedListItems = 5
 )
 
 // CheckEvaluator interface defines the evaluation behavior specific to each check type
 type CheckEvaluator interface {
 	Evaluate(ctx context.Context) CheckResult
+}
+
+type CheckResult struct {
+	Pass    bool
+	Latency time.Duration
+	Err     error
+	// LogAttrs holds check-type-specific attributes to include in the check's pass/non-pass log line.
+	// Evaluators populate this with whatever detail helps diagnose the result, such as an HTTP status code.
+	LogAttrs []slog.Attr
+}
+
+// checkResultLogArgs builds the slog arguments describing a single check evaluation,
+// including any check-type-specific attributes the evaluator attached to the result.
+func checkResultLogArgs(check Check, result CheckResult) []any {
+	args := []any{
+		"evaluatorType", fmt.Sprintf("%T", check.Evaluator),
+		"name", check.Name,
+		"environment", check.Environment,
+		"tags", check.Tags,
+		"pass", result.Pass,
+		"latency", result.Latency.Milliseconds(),
+		"error", result.Err,
+	}
+
+	for _, attr := range result.LogAttrs {
+		args = append(args, attr)
+	}
+
+	return args
+}
+
+// truncateForLog returns at most MaxLoggedPayloadLength characters of the given payload,
+// so that a log attribute cannot grow with the size of a check's response.
+func truncateForLog(payload string) string {
+	trimmed := strings.TrimSpace(payload)
+
+	// Cut on runes rather than bytes so multi-byte characters are never split.
+	runes := []rune(trimmed)
+	if len(runes) <= MaxLoggedPayloadLength {
+		return trimmed
+	}
+
+	return string(runes[:MaxLoggedPayloadLength])
+}
+
+// truncateListForLog returns at most MaxLoggedListItems of the given values, each truncated by
+// truncateForLog. Individual values can be long and can carry sensitive strings, such as a DNS TXT
+// record holding a domain verification token, so a log attribute never holds a whole list verbatim.
+// Callers should log the untruncated item count alongside the result.
+func truncateListForLog(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+
+	capped := values
+	if len(capped) > MaxLoggedListItems {
+		capped = capped[:MaxLoggedListItems]
+	}
+
+	truncated := make([]string, 0, len(capped))
+	for _, value := range capped {
+		truncated = append(truncated, truncateForLog(value))
+	}
+
+	return truncated
 }
 
 // Check contains common metadata and delegates evaluation to a CheckEvaluator
@@ -155,13 +226,7 @@ func (e *Evaluator) checkEvaluateLoop(ctx context.Context, check Check) {
 		// Do not treat check failures as actual errors, check failures exist at a higher-level.
 		slog.Info(
 			"evaluated check for scheduled run",
-			"evaluatorType", fmt.Sprintf("%T", check.Evaluator),
-			"name", check.Name,
-			"environment", check.Environment,
-			"tags", check.Tags,
-			"pass", result.Pass,
-			"latency", result.Latency.Milliseconds(),
-			"error", result.Err,
+			checkResultLogArgs(check, result)...,
 		)
 
 		timer.Reset(interval)
@@ -176,13 +241,7 @@ func (e *Evaluator) EvaluateChecksByName(ctx context.Context, checkName string) 
 			result := check.Evaluator.Evaluate(ctx)
 			slog.Info(
 				"evaluated check for single run",
-				"evaluatorType", fmt.Sprintf("%T", check.Evaluator),
-				"name", check.Name,
-				"environment", check.Environment,
-				"tags", check.Tags,
-				"pass", result.Pass,
-				"latency", result.Latency.Milliseconds(),
-				"error", result.Err,
+				checkResultLogArgs(check, result)...,
 			)
 		}
 	}

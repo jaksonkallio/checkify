@@ -3,6 +3,7 @@ package evaluator
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net"
 	"time"
 )
@@ -105,21 +106,33 @@ func (c *TCPCheckEvaluator) Evaluate(ctx context.Context) CheckResult {
 
 	address := fmt.Sprintf("%s:%d", c.Host, c.Port)
 
+	// The network shows which stack was actually dialed, which matters when the host has both A and AAAA records.
+	logAttrs := []slog.Attr{
+		slog.String("tcpNetwork", network),
+	}
+
 	start := time.Now()
 	conn, err := c.dialer.DialContext(ctx, network, address)
 	latency := time.Since(start)
 	if err != nil {
 		return CheckResult{
-			Pass:    false,
-			Latency: latency,
-			Err:     err,
+			Pass:     false,
+			Latency:  latency,
+			Err:      err,
+			LogAttrs: logAttrs,
 		}
 	}
 	defer func() { _ = conn.Close() }()
 
+	// The remote address identifies which host the name resolved to, so a single bad backend is identifiable.
+	if remoteAddr := conn.RemoteAddr(); remoteAddr != nil {
+		logAttrs = append(logAttrs, slog.String("tcpRemoteAddr", remoteAddr.String()))
+	}
+
 	return CheckResult{
-		Pass:    true,
-		Latency: latency,
-		Err:     nil,
+		Pass:     true,
+		Latency:  latency,
+		Err:      nil,
+		LogAttrs: logAttrs,
 	}
 }

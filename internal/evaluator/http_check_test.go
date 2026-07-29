@@ -687,3 +687,140 @@ func TestErrCheckTimeout(t *testing.T) {
 		assert.Equal(t, "check timed out after 5s", err.Error())
 	})
 }
+
+func TestHTTPCheck_LogAttrs(t *testing.T) {
+	newCheck := func(t *testing.T, responseFormat ResponseFormat, assertion string, resp *http.Response) Check {
+		t.Helper()
+
+		mockClient := new(MockHTTPClient)
+		mockClient.On("Do", mock.Anything).Return(resp, nil)
+
+		check, err := NewHTTPCheck(
+			"test",
+			"https://api.test.com/health",
+			"GET",
+			10*time.Second,
+			5*time.Second,
+			"test",
+			nil,
+			nil,
+			responseFormat,
+			assertion,
+		)
+		require.NoError(t, err)
+		check.Evaluator.(*HTTPCheckEvaluator).httpClient = mockClient
+
+		return check
+	}
+
+	t.Run("StatusCodeOnPass", func(t *testing.T) {
+		check := newCheck(t, FormatJSON, `code == 200`, &http.Response{
+			StatusCode: 200,
+			Body:       io.NopCloser(strings.NewReader(`{"status":"ok"}`)),
+			Header:     http.Header{},
+		})
+
+		result := check.Evaluator.Evaluate(context.Background())
+
+		require.True(t, result.Pass)
+		assert.Equal(t, int64(200), logAttr(t, result, "httpStatusCode").Int64())
+		assert.Equal(t, int64(15), logAttr(t, result, "httpBodySize").Int64())
+	})
+
+	t.Run("StatusCodeOnAssertionNonPass", func(t *testing.T) {
+		check := newCheck(t, FormatJSON, `code == 200`, &http.Response{
+			StatusCode: 503,
+			Body:       io.NopCloser(strings.NewReader(`{"status":"down"}`)),
+			Header:     http.Header{},
+		})
+
+		result := check.Evaluator.Evaluate(context.Background())
+
+		require.False(t, result.Pass)
+		require.NoError(t, result.Err)
+		assert.Equal(t, int64(503), logAttr(t, result, "httpStatusCode").Int64())
+	})
+
+	t.Run("BodyPrefixOnJSONParseFailure", func(t *testing.T) {
+		check := newCheck(t, FormatJSON, `code == 200`, &http.Response{
+			StatusCode: 500,
+			Body:       io.NopCloser(strings.NewReader("rate limit exceeded")),
+			Header:     http.Header{},
+		})
+
+		result := check.Evaluator.Evaluate(context.Background())
+
+		require.Error(t, result.Err)
+		assert.Contains(t, result.Err.Error(), "parse JSON response")
+		assert.Equal(t, "rate limit exceeded", logAttr(t, result, "httpBodyPrefix").String())
+		assert.Equal(t, int64(500), logAttr(t, result, "httpStatusCode").Int64())
+		assert.Equal(t, int64(19), logAttr(t, result, "httpBodySize").Int64())
+	})
+
+	t.Run("BodyPrefixTruncatedOnJSONParseFailure", func(t *testing.T) {
+		body := strings.Repeat("x", MaxLoggedPayloadLength+500)
+		check := newCheck(t, FormatJSON, `code == 200`, &http.Response{
+			StatusCode: 200,
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Header:     http.Header{},
+		})
+
+		result := check.Evaluator.Evaluate(context.Background())
+
+		require.Error(t, result.Err)
+		assert.Len(t, logAttr(t, result, "httpBodyPrefix").String(), MaxLoggedPayloadLength)
+		// The full size is still reported, so the reader can tell the prefix was cut.
+		assert.Equal(t, int64(MaxLoggedPayloadLength+500), logAttr(t, result, "httpBodySize").Int64())
+	})
+
+	t.Run("NoBodyPrefixWhenJSONParses", func(t *testing.T) {
+		check := newCheck(t, FormatJSON, `code == 200`, &http.Response{
+			StatusCode: 200,
+			Body:       io.NopCloser(strings.NewReader(`{"status":"ok"}`)),
+			Header:     http.Header{},
+		})
+
+		result := check.Evaluator.Evaluate(context.Background())
+
+		assert.False(t, hasLogAttr(result, "httpBodyPrefix"))
+	})
+
+	t.Run("NoBodyPrefixForNonJSONFormat", func(t *testing.T) {
+		check := newCheck(t, FormatString, `body == "ok"`, &http.Response{
+			StatusCode: 200,
+			Body:       io.NopCloser(strings.NewReader("not json")),
+			Header:     http.Header{},
+		})
+
+		result := check.Evaluator.Evaluate(context.Background())
+
+		require.NoError(t, result.Err)
+		assert.False(t, hasLogAttr(result, "httpBodyPrefix"))
+		assert.Equal(t, int64(200), logAttr(t, result, "httpStatusCode").Int64())
+	})
+
+	t.Run("NoStatusCodeWhenRequestFails", func(t *testing.T) {
+		mockClient := new(MockHTTPClient)
+		mockClient.On("Do", mock.Anything).Return(nil, errors.New("connection refused"))
+
+		check, err := NewHTTPCheck(
+			"test",
+			"https://api.test.com/health",
+			"GET",
+			10*time.Second,
+			5*time.Second,
+			"test",
+			nil,
+			nil,
+			FormatJSON,
+			`code == 200`,
+		)
+		require.NoError(t, err)
+		check.Evaluator.(*HTTPCheckEvaluator).httpClient = mockClient
+
+		result := check.Evaluator.Evaluate(context.Background())
+
+		require.Error(t, result.Err)
+		assert.Empty(t, result.LogAttrs)
+	})
+}

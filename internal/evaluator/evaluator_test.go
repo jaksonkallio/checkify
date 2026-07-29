@@ -2,8 +2,12 @@ package evaluator
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -197,5 +201,156 @@ func TestRealClock(t *testing.T) {
 
 		assert.NotNil(t, timer)
 		timer.Stop() // Clean up
+	})
+}
+
+// logAttr looks up a single log attribute on a check result by key.
+func logAttr(t *testing.T, result CheckResult, key string) slog.Value {
+	t.Helper()
+
+	for _, attr := range result.LogAttrs {
+		if attr.Key == key {
+			return attr.Value
+		}
+	}
+
+	t.Fatalf("no log attribute with key %q in %v", key, result.LogAttrs)
+	return slog.Value{}
+}
+
+// hasLogAttr reports whether a check result carries a log attribute with the given key.
+func hasLogAttr(result CheckResult, key string) bool {
+	for _, attr := range result.LogAttrs {
+		if attr.Key == key {
+			return true
+		}
+	}
+
+	return false
+}
+
+func TestCheckResultLogArgs(t *testing.T) {
+	t.Run("IncludesCommonAttributes", func(t *testing.T) {
+		check := Check{Name: "check1", Environment: "prod", Tags: []string{"tag1"}}
+		result := CheckResult{Pass: true, Latency: 250 * time.Millisecond}
+
+		args := checkResultLogArgs(check, result)
+
+		assert.Equal(t, []any{
+			"evaluatorType", "<nil>",
+			"name", "check1",
+			"environment", "prod",
+			"tags", []string{"tag1"},
+			"pass", true,
+			"latency", int64(250),
+			"error", error(nil),
+		}, args)
+	})
+
+	t.Run("AppendsCheckSpecificAttributes", func(t *testing.T) {
+		check := Check{Name: "check1", Environment: "prod"}
+		result := CheckResult{
+			Pass: false,
+			LogAttrs: []slog.Attr{
+				slog.Int("httpStatusCode", 503),
+				slog.String("httpBodyPrefix", "retry later"),
+			},
+		}
+
+		args := checkResultLogArgs(check, result)
+
+		require.Len(t, args, 16)
+		assert.Equal(t, slog.Int("httpStatusCode", 503), args[14])
+		assert.Equal(t, slog.String("httpBodyPrefix", "retry later"), args[15])
+	})
+}
+
+func TestTruncateForLog(t *testing.T) {
+	t.Run("ShortPayloadKeptWhole", func(t *testing.T) {
+		assert.Equal(t, "retry later", truncateForLog("retry later"))
+	})
+
+	t.Run("SurroundingWhitespaceTrimmed", func(t *testing.T) {
+		assert.Equal(t, "retry later", truncateForLog("\n  retry later\n"))
+	})
+
+	t.Run("LongPayloadTruncated", func(t *testing.T) {
+		payload := strings.Repeat("a", MaxLoggedPayloadLength+50)
+
+		truncated := truncateForLog(payload)
+
+		assert.Len(t, truncated, MaxLoggedPayloadLength)
+	})
+
+	t.Run("MultiByteCharactersNotSplit", func(t *testing.T) {
+		// Each rune is 3 bytes, so a byte-wise cut would leave an invalid character at the end.
+		payload := strings.Repeat("あ", MaxLoggedPayloadLength+10)
+
+		truncated := truncateForLog(payload)
+
+		assert.True(t, utf8.ValidString(truncated))
+		assert.Equal(t, MaxLoggedPayloadLength, utf8.RuneCountInString(truncated))
+	})
+
+	t.Run("EmptyPayload", func(t *testing.T) {
+		assert.Equal(t, "", truncateForLog(""))
+	})
+}
+
+func TestTruncateListForLog(t *testing.T) {
+	t.Run("ShortListKeptWhole", func(t *testing.T) {
+		values := []string{"1.2.3.4", "5.6.7.8"}
+
+		assert.Equal(t, values, truncateListForLog(values))
+	})
+
+	t.Run("LongListCapped", func(t *testing.T) {
+		values := make([]string, 0, MaxLoggedListItems+20)
+		for i := range MaxLoggedListItems + 20 {
+			values = append(values, fmt.Sprintf("record-%d", i))
+		}
+
+		truncated := truncateListForLog(values)
+
+		require.Len(t, truncated, MaxLoggedListItems)
+		// The retained items are the first ones, unmodified.
+		assert.Equal(t, values[:MaxLoggedListItems], truncated)
+	})
+
+	t.Run("LongValuesTruncated", func(t *testing.T) {
+		token := strings.Repeat("t", MaxLoggedPayloadLength+200)
+
+		truncated := truncateListForLog([]string{"short", token})
+
+		require.Len(t, truncated, 2)
+		assert.Equal(t, "short", truncated[0])
+		assert.Len(t, truncated[1], MaxLoggedPayloadLength)
+	})
+
+	t.Run("BothCapsAppliedTogether", func(t *testing.T) {
+		values := make([]string, 0, MaxLoggedListItems+5)
+		for range MaxLoggedListItems + 5 {
+			values = append(values, strings.Repeat("t", MaxLoggedPayloadLength+200))
+		}
+
+		truncated := truncateListForLog(values)
+
+		require.Len(t, truncated, MaxLoggedListItems)
+		for _, value := range truncated {
+			assert.Len(t, value, MaxLoggedPayloadLength)
+		}
+	})
+
+	t.Run("EmptyList", func(t *testing.T) {
+		assert.Nil(t, truncateListForLog(nil))
+		assert.Nil(t, truncateListForLog([]string{}))
+	})
+
+	t.Run("DoesNotMutateInput", func(t *testing.T) {
+		values := []string{strings.Repeat("t", MaxLoggedPayloadLength+10)}
+
+		truncateListForLog(values)
+
+		assert.Len(t, values[0], MaxLoggedPayloadLength+10)
 	})
 }
